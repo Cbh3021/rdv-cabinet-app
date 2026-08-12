@@ -30,7 +30,6 @@ const firebaseConfig = {
   messagingSenderId: "783489025252",
   appId: "1:783489025252:web:e4612030b334faf34fd8f1"
 };
-};
 const COUNTRY_CODE = "216"; // Tunisie
 
 const isConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
