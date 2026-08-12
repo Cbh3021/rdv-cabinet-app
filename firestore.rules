@@ -1,0 +1,89 @@
+rules_version = '2';
+
+// =============================================================================
+// RÈGLES ACTIVES — nécessitent que l'authentification soit configurée côté
+// Firebase (Email/Mot de passe + Téléphone activés dans Authentication, et le
+// document admins/{uid} créé pour ton compte médecin). Voir les instructions
+// en haut du fichier www/index.html (section FIREBASE — CONFIGURATION REQUISE).
+//
+// - Le médecin (compte email/mdp, référencé dans la collection `admins`) voit
+//   et gère tous les rendez-vous.
+// - Un patient authentifié par SMS ne voit QUE les rendez-vous dont le champ
+//   `phone` correspond exactement au numéro vérifié par Firebase
+//   (request.auth.token.phone_number, format E.164, ex: +21622123456).
+// - Un patient ne peut jamais créer, modifier ou supprimer de rendez-vous.
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isOwner(phone) {
+      return request.auth != null &&
+        request.auth.token.phone_number != null &&
+        request.auth.token.phone_number == phone;
+    }
+
+    function isValidAppointment() {
+      return request.resource.data.keys().hasOnly(
+               ['name','phone','date','time','reason','notes']
+             )
+             && request.resource.data.name is string
+             && request.resource.data.name.size() > 0
+             && request.resource.data.name.size() < 200
+             && request.resource.data.phone is string
+             && request.resource.data.phone.matches('^\\+[0-9]{6,15}$')
+             && request.resource.data.date is string
+             && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+             && request.resource.data.time is string
+             && request.resource.data.time.matches('^[0-9]{2}:[0-9]{2}$')
+             && request.resource.data.reason is string;
+    }
+
+    match /appointments/{apptId} {
+      // le médecin voit tout ; un patient ne voit que ses propres RDV
+      allow read: if isAdmin() || isOwner(resource.data.phone);
+      // seul le médecin crée/modifie/supprime, et seulement des données valides
+      allow create, update: if isAdmin() && isValidAppointment();
+      allow delete: if isAdmin();
+    }
+
+    // liste des comptes médecin autorisés — un document par uid admin,
+    // créé manuellement dans la console Firebase (jamais via l'appli)
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+  }
+}
+
+// =============================================================================
+// SECOURS — SANS AUTHENTIFICATION (si tu reviens temporairement à la version
+// sans connexion pour tester, remplace les règles ci-dessus par celles-ci ;
+// aucune confidentialité réelle entre patients dans ce mode, seulement une
+// validation de la forme des données)
+// =============================================================================
+/*
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /appointments/{apptId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasOnly(
+                                 ['name','phone','date','time','reason','notes']
+                               )
+                             && request.resource.data.name is string
+                             && request.resource.data.name.size() > 0
+                             && request.resource.data.date is string
+                             && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+                             && request.resource.data.time is string
+                             && request.resource.data.time.matches('^[0-9]{2}:[0-9]{2}$');
+      allow delete: if true;
+    }
+  }
+}
+*/
