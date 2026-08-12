@@ -32,7 +32,7 @@ const firebaseConfig = {
 };
 const COUNTRY_CODE = "216"; // Tunisie
 
-const isConfigured = firebaseConfig.apiKey !== "AIzaSyBLCg0Wnu52-QziLAcU2qIjj7iR8JwUMsk";
+const isConfigured = firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY";
 
 import { initializeApp } from "firebase/app";
 import {
