@@ -23,12 +23,12 @@
       (section "RÈGLES ACTIVES") puis Publier.
    ======================================================================= */
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyBLCg0Wnu52-QziLAcU2qIjj7iR8JwUMsk",
+  authDomain: "rdv-cabinet-belhoula.firebaseapp.com",
+  projectId: "rdv-cabinet-belhoula",
+  storageBucket: "rdv-cabinet-belhoula.firebasestorage.app",
+  messagingSenderId: "783489025252",
+  appId: "1:783489025252:web:e4612030b334faf34fd8f1"
 };
 const COUNTRY_CODE = "216"; // Tunisie
 
