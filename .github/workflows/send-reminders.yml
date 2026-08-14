@@ -1,0 +1,28 @@
+name: Send appointment reminders
+
+on:
+  schedule:
+    # Tous les jours à 07:00 heure de Tunisie (UTC+1 toute l'année, pas de DST)
+    # → 06:00 UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Installer les dépendances
+        run: npm install firebase-admin
+
+      - name: Envoyer les rappels
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/send-reminders.js
