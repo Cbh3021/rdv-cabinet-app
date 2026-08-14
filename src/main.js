@@ -18,23 +18,6 @@
       google-services.json et place-le dans android/app/.
    8. Dans Firestore Database > Règles, colle le contenu de firestore.rules
       puis Publier.
-   9. Le patient ne crée plus lui-même son compte : c'est le médecin qui le
-      crée depuis l'appli au moment du 1er RDV (bouton "Enregistrer"), et le
-      code s'affiche dans une popup à recopier/donner au patient.
-   10. Notifications push (optionnel, 100% gratuit — pas de plan Blaze) :
-      a. Project Settings > Cloud Messaging > Web configuration > générer
-         une paire de clés VAPID, coller la clé publique dans VAPID_KEY
-         ci-dessous. (Cloud Messaging est gratuit sur le plan Spark.)
-      b. Project Settings > Comptes de service > "Générer une nouvelle clé
-         privée" → enregistrer ce JSON comme secret GitHub
-         FIREBASE_SERVICE_ACCOUNT (jamais dans le dépôt).
-      c. Le workflow .github/workflows/send-reminders.yml exécute chaque
-         jour scripts/send-reminders.js sur un cron GitHub Actions gratuit
-         (aucune Cloud Function, aucune facturation Firebase) : il envoie
-         un rappel J-3, J-1 et jour J à tout patient ayant activé les
-         notifications.
-      d. Placer public/firebase-messaging-sw.js à la racine du site déployé
-         (même config que firebaseConfig ci-dessous).
    ======================================================================= */
 const firebaseConfig = {
   apiKey: "AIzaSyBLCg0Wnu52-QziLAcU2qIjj7iR8JwUMsk",
@@ -48,7 +31,7 @@ const COUNTRY_CODE = "216"; // Tunisie
 
 const isConfigured = firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY";
 
-import { initializeApp, deleteApp } from "firebase/app";
+import { initializeApp } from "firebase/app";
 import {
   initializeFirestore, persistentLocalCache, persistentSingleTabManager,
   collection, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc,
@@ -58,19 +41,12 @@ import {
   getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
   signOut, onAuthStateChanged
 } from "firebase/auth";
-import { getMessaging, getToken as getFcmToken, isSupported as isMessagingSupported } from "firebase/messaging";
 import { Capacitor } from "@capacitor/core";
 import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 
 const isNative = Capacitor.isNativePlatform();
 
-// Clé VAPID publique du projet Firebase (Console > Project Settings > Cloud
-// Messaging > Web configuration > "Generate key pair"). Nécessaire pour les
-// notifications push web. Laisser vide désactive juste ce bouton, le reste
-// de l'appli fonctionne normalement.
-const VAPID_KEY = "";
-
-let db=null, auth=null, apptsCol=null, contactsCol=null, messaging=null;
+let db=null, auth=null, apptsCol=null, contactsCol=null;
 if(isConfigured){
   const app = initializeApp(firebaseConfig);
   db = initializeFirestore(app, {
@@ -83,15 +59,8 @@ if(isConfigured){
   // Carnet de contacts (nom lié au numéro de téléphone), rempli/mis à jour
   // automatiquement à chaque enregistrement de RDV. Dans firestore.rules,
   // donne à la collection "contacts" les mêmes règles (lecture/écriture
-  // réservées au médecin) que la collection "appointments", plus le droit
-  // pour le patient propriétaire de mettre à jour uniquement son fcmToken.
+  // réservées au médecin) que la collection "appointments".
   contactsCol = collection(db, "contacts");
-
-  // Messaging (push web) : optionnel, ne bloque jamais le reste de l'appli
-  // s'il n'est pas supporté (Safari ancien, contexte non sécurisé, etc.)
-  isMessagingSupported().then(supported=>{
-    if(supported){ try{ messaging = getMessaging(app); }catch(e){ console.warn("FCM indisponible", e); } }
-  });
 } else {
   document.getElementById('configBanner').style.display = 'block';
 }
@@ -139,6 +108,7 @@ let muted = false;
 let role = null;
 let patientPhoneE164 = null;
 let unsubscribeAppts = null;
+let patientMode = null; // 'new' | 'existing'
 let syncOn = false;
 let lang = localStorage.getItem('rdvLang') || 'fr';
 
@@ -151,47 +121,6 @@ function phoneFromPatientEmail(email){
   return email.slice(1, email.length - "@rdvcabinet.local".length);
 }
 function todayStr(){ return new Date().toISOString().slice(0,10); }
-
-/* ---------------- ADMIN: création de compte patient (remis en main propre) ----------------
-   Le patient ne peut plus s'auto-inscrire : ça évitait qu'un tiers connaissant
-   son numéro crée le compte à sa place et intercepte ensuite ses RDV.
-   Le médecin crée le compte au cabinet et communique le code directement au
-   patient. On utilise une 2e instance Firebase ("scratch app") pour que la
-   création de compte ne déconnecte pas la session admin en cours — le SDK
-   Firebase Auth "signIn" automatiquement l'utilisateur nouvellement créé, ce
-   qui écraserait sinon la session du médecin. */
-async function createPatientAccountAsAdmin(e164){
-  const scratchApp = initializeApp(firebaseConfig, "patientCreate_"+Date.now()+"_"+uid());
-  const scratchAuth = getAuth(scratchApp);
-  try{
-    const code = generatePatientCode();
-    await createUserWithEmailAndPassword(scratchAuth, patientEmailFor(e164), code);
-    await signOut(scratchAuth).catch(()=>{});
-    return code;
-  } finally {
-    await deleteApp(scratchApp).catch(()=>{});
-  }
-}
-
-/* ---------------- PATIENT: activer les notifications push (FCM) ---------------- */
-async function enableNotifications(){
-  if(!messaging || !VAPID_KEY){ return {ok:false, reason:'unsupported'}; }
-  try{
-    const perm = await Notification.requestPermission();
-    if(perm !== 'granted') return {ok:false, reason:'denied'};
-    const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-    const token = await getFcmToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
-    if(!token) return {ok:false, reason:'no-token'};
-    // Écrit uniquement le champ fcmToken sur SON PROPRE contact — voir la
-    // règle dédiée dans firestore.rules (le patient ne peut pas toucher aux
-    // autres champs ni aux contacts d'autrui).
-    await setDoc(doc(db,"contacts", patientPhoneE164), { fcmToken: token, lang }, { merge:true });
-    return {ok:true};
-  }catch(e){
-    console.error("Erreur activation notifications", e);
-    return {ok:false, reason:'error'};
-  }
-}
 function toE164(raw){
   let digits = (raw||"").replace(/\D/g,"");
   if(digits.startsWith(COUNTRY_CODE)) digits = digits.slice(COUNTRY_CODE.length);
@@ -233,20 +162,16 @@ const TRANSLATIONS = {
     no_rdv_prog: "Aucun rendez-vous programmé.",
     status_past: "Passé", status_today: "Aujourd'hui", status_soon: "Bientôt", status_ok: "À venir",
     patient_intro_title: "Mes rendez-vous",
-    patient_intro_sub: "Entre ton numéro et le code personnel remis par le cabinet pour accéder à tes rendez-vous.",
+    patient_intro_sub: "Entre ton numéro de téléphone pour accéder à tes rendez-vous.",
     phone_placeholder: "Ex: 22 123 456",
-    code_field_label: "Code personnel",
-    patient_login_btn: "Accéder à mes rendez-vous",
-    code_error: "Numéro ou code incorrect.",
-    no_account_error: "Aucun compte pour ce numéro. Demande ton code au cabinet.",
-    patient_code_title: "Code patient généré",
-    patient_code_sub: "Note ce code et donne-le au patient — il lui sera demandé à chaque connexion.",
-    patient_code_ok: "OK, noté",
-    phone_hint_invalid: "Numéro invalide — 8 chiffres tunisiens attendus.",
-    notif_banner_title: "Active les rappels",
-    notif_banner_sub: "Reçois une notification avant chaque rendez-vous, même sans ouvrir l'appli.",
-    notif_banner_btn: "Activer les notifications",
-    notif_banner_error: "Impossible d'activer les notifications sur cet appareil.",
+    first_visit_btn: "Première visite", have_code_btn: "J'ai déjà un code",
+    code_new_title: "Ton code personnel", code_new_sub: "Note bien ce code — il te sera demandé à chaque visite.",
+    code_continue: "J'ai noté mon code, continuer",
+    code_enter_title: "Entre ton code", code_enter_sub: "Le code personnel à 6 chiffres reçu lors de ta première visite.",
+    code_verify: "Vérifier", code_error: "Code incorrect. Réessaie.",
+    code_change_number: "Changer de numéro",
+    no_account_error: "Aucun compte pour ce numéro. Choisis \"Première visite\".",
+    account_exists_error: "Ce numéro a déjà un code. Choisis \"J'ai déjà un code\".",
     no_rdv_patient_title: "Aucun rendez-vous trouvé",
     no_rdv_patient_sub: "Contacte le cabinet si tu penses qu'un RDV devrait apparaître ici.",
     with_doctor: "avec Dr Hédi Belhoula",
@@ -289,20 +214,16 @@ const TRANSLATIONS = {
     no_rdv_prog: "لا يوجد أي موعد مبرمج.",
     status_past: "منقضٍ", status_today: "اليوم", status_soon: "قريباً", status_ok: "قادم",
     patient_intro_title: "مواعيدي",
-    patient_intro_sub: "أدخل رقمك والرمز الشخصي الذي سلّمته لك العيادة للاطلاع على مواعيدك.",
+    patient_intro_sub: "أدخل رقم هاتفك للوصول إلى مواعيدك.",
     phone_placeholder: "مثال: 22 123 456",
-    code_field_label: "الرمز الشخصي",
-    patient_login_btn: "الاطلاع على مواعيدي",
-    code_error: "الرقم أو الرمز غير صحيح.",
-    no_account_error: "لا يوجد حساب لهذا الرقم. اطلب رمزك من العيادة.",
-    patient_code_title: "تم إنشاء رمز المريض",
-    patient_code_sub: "احتفظ بهذا الرمز وسلّمه للمريض — سيُطلب منه في كل اتصال.",
-    patient_code_ok: "تم الحفظ",
-    phone_hint_invalid: "رقم غير صالح — يجب أن يتكوّن من 8 أرقام تونسية.",
-    notif_banner_title: "فعّل التذكيرات",
-    notif_banner_sub: "استلم إشعاراً قبل كل موعد، حتى دون فتح التطبيق.",
-    notif_banner_btn: "تفعيل الإشعارات",
-    notif_banner_error: "تعذّر تفعيل الإشعارات على هذا الجهاز.",
+    first_visit_btn: "أول زيارة", have_code_btn: "لدي رمز بالفعل",
+    code_new_title: "رمزك الشخصي", code_new_sub: "احتفظ بهذا الرمز جيداً — سيُطلب منك في كل زيارة.",
+    code_continue: "سجّلت رمزي، متابعة",
+    code_enter_title: "أدخل رمزك", code_enter_sub: "الرمز الشخصي المكوّن من 6 أرقام الذي تحصلت عليه في أول زيارة.",
+    code_verify: "تحقق", code_error: "رمز غير صحيح. حاول مجدداً.",
+    code_change_number: "تغيير الرقم",
+    no_account_error: "لا يوجد حساب لهذا الرقم. اختر \"أول زيارة\".",
+    account_exists_error: "هذا الرقم لديه رمز بالفعل. اختر \"لدي رمز بالفعل\".",
     no_rdv_patient_title: "لم يتم العثور على أي موعد",
     no_rdv_patient_sub: "تواصل مع العيادة إذا كنت تعتقد أن موعداً يجب أن يظهر هنا.",
     with_doctor: "مع الدكتور الهادي بلحولة",
@@ -356,12 +277,15 @@ function applyLanguage(){
   document.getElementById('patientIntroSub').textContent = t('patient_intro_sub');
   document.getElementById('respectDateNote').textContent = t('respect_date_note');
   document.getElementById('phoneInput').placeholder = t('phone_placeholder');
-  document.getElementById('codeFieldLabel').textContent = t('code_field_label');
-  document.getElementById('codeInput').placeholder = '123456';
-  document.getElementById('patientLoginBtn').textContent = t('patient_login_btn');
-  document.getElementById('patientCodeTitle').textContent = t('patient_code_title');
-  document.getElementById('patientCodeSub').textContent = t('patient_code_sub');
-  document.getElementById('patientCodeOkBtn').textContent = t('patient_code_ok');
+  document.getElementById('firstVisitBtn').textContent = t('first_visit_btn');
+  document.getElementById('haveCodeBtn').textContent = t('have_code_btn');
+  document.getElementById('codeNewTitle').textContent = t('code_new_title');
+  document.getElementById('codeNewSub').textContent = t('code_new_sub');
+  document.getElementById('codeContinueBtn').textContent = t('code_continue');
+  document.getElementById('codeEnterTitle').textContent = t('code_enter_title');
+  document.getElementById('codeEnterSub').textContent = t('code_enter_sub');
+  document.getElementById('codeSubmit').textContent = t('code_verify');
+  document.getElementById('backToPhoneBtn').textContent = t('code_change_number');
   document.getElementById('modalTitle').textContent = editingId ? t('modal_edit_title') : t('modal_add_title');
   document.getElementById('nameLabel').textContent = t('patient_name');
   document.getElementById('fName').placeholder = t('patient_name_ph');
@@ -502,36 +426,18 @@ function enterRole(r){
     const existingPhone = isConfigured && auth.currentUser ? phoneFromPatientEmail(auth.currentUser.email) : null;
     if(!isConfigured || !existingPhone){
       document.getElementById('phoneGate').style.display='';
+      document.getElementById('codeGate').style.display='none';
+      document.getElementById('codeDisplayGate').style.display='none';
       document.getElementById('phoneInput').value='';
-      document.getElementById('codeInput').value='';
     } else {
       patientPhoneE164 = existingPhone;
       document.getElementById('phoneGate').style.display='none';
+      document.getElementById('codeGate').style.display='none';
+      document.getElementById('codeDisplayGate').style.display='none';
       document.getElementById('patientResultWrap').style.display='';
       subscribePatient();
-      maybeShowNotifBanner();
     }
   }
-}
-
-/* ---------------- PATIENT: bannière d'activation des notifications ---------------- */
-function maybeShowNotifBanner(){
-  const banner = document.getElementById('notifBanner');
-  if(!banner) return;
-  const supported = !!(messaging && VAPID_KEY && 'Notification' in window);
-  const alreadyGranted = supported && Notification.permission === 'granted';
-  if(!supported || alreadyGranted){ banner.style.display='none'; return; }
-  banner.style.display='';
-  banner.innerHTML = `<div class="patient-hero" style="padding:16px 20px;text-align:left;">
-    <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${t('notif_banner_title')}</div>
-    <div style="font-size:12.5px;color:#6b6f80;margin-bottom:10px;">${t('notif_banner_sub')}</div>
-    <button class="btn-primary" id="notifEnableBtn" style="width:100%;">${t('notif_banner_btn')}</button>
-  </div>`;
-  document.getElementById('notifEnableBtn').addEventListener('click', async ()=>{
-    const res = await enableNotifications();
-    if(res.ok){ banner.style.display='none'; }
-    else { banner.querySelector('div').textContent = t('notif_banner_error'); }
-  });
 }
 
 document.getElementById('muteBtn').addEventListener('click', ()=>{
@@ -696,22 +602,17 @@ function refreshNameSuggestions(){
     .filter(c=>{ if(seen.has(c.name)) return false; seen.add(c.name); return true; })
     .map(c=>`<option value="${escapeHtml(c.name)}"></option>`).join('');
 }
-async function saveContact(name, phone, extra){
+async function saveContact(name, phone){
   if(!name || !phone) return;
-  const data = Object.assign({name, phone}, extra||{});
   if(isConfigured){
-    try{ await setDoc(doc(db,"contacts", phone), data, { merge:true }); }
+    try{ await setDoc(doc(db,"contacts", phone), {name, phone}); }
     catch(e){ console.error("Erreur sauvegarde contact", e); }
   } else {
     const i = contacts.findIndex(c=>c.phone===phone);
-    if(i>=0) Object.assign(contacts[i], data); else contacts.push({id:phone, ...data});
+    if(i>=0) contacts[i].name = name; else contacts.push({id:phone, name, phone});
     localStorage.setItem('rdvContacts', JSON.stringify(contacts));
     refreshNameSuggestions();
   }
-}
-function contactHasAccount(phone){
-  const c = contacts.find(c=>c.phone===phone);
-  return !!(c && c.hasAccount);
 }
 document.getElementById('fName').addEventListener('input', ()=>{
   const name = document.getElementById('fName').value.trim();
@@ -746,8 +647,6 @@ function openModal(a){
   document.getElementById('fTime').value = a ? a.time : '09:00';
   document.getElementById('fReason').value = a ? a.reason : REASONS[0];
   document.getElementById('fNotes').value = a ? (a.notes||'') : '';
-  document.getElementById('phoneFieldHint').style.color = '';
-  document.getElementById('phoneFieldHint').textContent = t('phone_hint');
   document.getElementById('overlay').classList.add('open');
 }
 function closeModal(){ document.getElementById('overlay').classList.remove('open'); }
@@ -764,61 +663,29 @@ document.getElementById('saveBtn').addEventListener('click', async ()=>{
   const reason = document.getElementById('fReason').value;
   const notes = document.getElementById('fNotes').value.trim();
   if(!name || !phone || phone===("+"+COUNTRY_CODE) || !date) return;
-  const digitsOnly = phone.replace('+'+COUNTRY_CODE,'');
-  if(digitsOnly.length !== 8){
-    document.getElementById('phoneFieldHint').style.color = 'var(--alert)';
-    document.getElementById('phoneFieldHint').textContent = t('phone_hint_invalid');
-    return;
-  }
   const data = {name,phone,date,time,reason,notes};
-  const isNewPhone = isConfigured && !contactHasAccount(phone);
   if(editingId) await editAppointment(editingId, data);
   else await createAppointment(data);
-
-  if(isNewPhone){
-    // Nouveau patient (au sens: pas encore de compte) → on crée son compte
-    // ici même, et on lui remet le code en main propre. On ne le fait qu'une
-    // fois par numéro : les visites suivantes n'en créent pas un nouveau.
-    try{
-      const code = await createPatientAccountAsAdmin(phone);
-      await saveContact(name, phone, {hasAccount:true});
-      showPatientCodeModal(code);
-    }catch(e){
-      console.error("Erreur création compte patient", e);
-      // Le RDV est quand même enregistré ; on retentera la création de
-      // compte au prochain RDV pour ce numéro (hasAccount reste absent).
-      await saveContact(name, phone, {hasAccount:false});
-    }
-  } else {
-    await saveContact(name, phone);
-  }
+  await saveContact(name, phone);
   closeModal();
 });
 
-function showPatientCodeModal(code){
-  document.getElementById('patientCodeValue').textContent = code;
-  document.getElementById('patientCodeOverlay').classList.add('open');
-}
-document.getElementById('patientCodeOkBtn').addEventListener('click', ()=>{
-  document.getElementById('patientCodeOverlay').classList.remove('open');
-});
+/* ---------------- PATIENT: phone + code permanent (sans SMS) ---------------- */
+/* On réutilise l'authentification email/mot de passe de Firebase : l'email
+   est dérivé du numéro de téléphone, et le "mot de passe" est le code à
+   6 chiffres du patient. C'est réellement vérifié côté serveur Firebase,
+   sans dépendre de SMS/Blaze/Play Integrity. */
 
-/* ---------------- PATIENT: connexion téléphone + code (code remis par le médecin) ----------------
-   Le patient ne crée plus lui-même son compte (voir createPatientAccountAsAdmin
-   côté admin) : il ne fait qu'entrer le numéro + le code à 6 chiffres qu'on
-   lui a communiqués au cabinet. On réutilise Firebase Auth email/mot de passe
-   (email dérivé du numéro, "mot de passe" = code), vérifié côté serveur. */
+document.getElementById('firstVisitBtn').addEventListener('click', ()=>{ startPatientFlow('new'); });
+document.getElementById('haveCodeBtn').addEventListener('click', ()=>{ startPatientFlow('existing'); });
 
-document.getElementById('patientLoginBtn').addEventListener('click', async ()=>{ await patientLogin(); });
-document.getElementById('codeInput').addEventListener('keydown',(e)=>{ if(e.key==='Enter') patientLogin(); });
-
-async function patientLogin(){
+function startPatientFlow(mode){
   const raw = document.getElementById('phoneInput').value.trim();
-  const code = document.getElementById('codeInput').value.trim();
   document.getElementById('phoneError').style.display='none';
-  if(!raw || !code) return;
+  if(!raw) return;
   const e164 = toE164(raw);
   patientPhoneE164 = e164;
+  patientMode = mode;
 
   if(!isConfigured){
     document.getElementById('phoneGate').style.display='none';
@@ -826,18 +693,63 @@ async function patientLogin(){
     subscribePatient();
     return;
   }
-  try{
-    await signInWithEmailAndPassword(auth, patientEmailFor(e164), code);
+
+  if(mode==='new'){
+    createPatientAccount(e164);
+  } else {
     document.getElementById('phoneGate').style.display='none';
-    document.getElementById('patientResultWrap').style.display='';
-    subscribePatient();
-    maybeShowNotifBanner();
+    document.getElementById('codeGate').style.display='';
+    document.getElementById('codeInput').value='';
+    document.getElementById('codeInput').focus();
+  }
+}
+document.getElementById('phoneInput').addEventListener('keydown',(e)=>{ if(e.key==='Enter') startPatientFlow('existing'); });
+
+async function createPatientAccount(e164){
+  try{
+    const code = generatePatientCode();
+    await createUserWithEmailAndPassword(auth, patientEmailFor(e164), code);
+    document.getElementById('phoneGate').style.display='none';
+    document.getElementById('codeDisplayGate').style.display='';
+    document.getElementById('codeDisplayValue').textContent = code;
   }catch(e){
+    console.error(e);
     document.getElementById('phoneError').textContent =
-      (e.code==='auth/user-not-found') ? t('no_account_error') : t('code_error');
+      (e.code==='auth/email-already-in-use') ? t('account_exists_error') : t('code_error');
     document.getElementById('phoneError').style.display='block';
   }
 }
+
+document.getElementById('codeContinueBtn').addEventListener('click', ()=>{
+  document.getElementById('codeDisplayGate').style.display='none';
+  document.getElementById('patientResultWrap').style.display='';
+  subscribePatient();
+});
+
+document.getElementById('codeSubmit').addEventListener('click', async ()=>{
+  const code = document.getElementById('codeInput').value.trim();
+  document.getElementById('codeError').style.display='none';
+  if(!code) return;
+  try{
+    await signInWithEmailAndPassword(auth, patientEmailFor(patientPhoneE164), code);
+    document.getElementById('codeGate').style.display='none';
+    document.getElementById('patientResultWrap').style.display='';
+    subscribePatient();
+  }catch(e){
+    document.getElementById('codeError').textContent =
+      (e.code==='auth/user-not-found') ? t('no_account_error') : t('code_error');
+    document.getElementById('codeError').style.display='block';
+  }
+});
+document.getElementById('codeInput').addEventListener('keydown',(e)=>{ if(e.key==='Enter') document.getElementById('codeSubmit').click(); });
+
+document.getElementById('backToPhoneBtn').addEventListener('click', async ()=>{
+  if(isConfigured && auth.currentUser){ try{ await signOut(auth); }catch(e){} }
+  document.getElementById('codeGate').style.display='none';
+  document.getElementById('codeDisplayGate').style.display='none';
+  document.getElementById('phoneGate').style.display='';
+  document.getElementById('phoneInput').value='';
+});
 
 /* ---------------- PATIENT: data subscription (own appointments only) ---------------- */
 function subscribePatient(){
