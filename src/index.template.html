@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>RDV Cabinet — Dr Hédi Belhoula</title>
+<title>Reminder CBH — Dr Hédi Belhoula</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -20,7 +20,7 @@
   #configBanner code{background:rgba(255,255,255,0.2);padding:2px 6px;border-radius:5px;}
 
   /* ---------- role gate ---------- */
-  #roleGate{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;}
+  #roleGate{position:relative;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;}
   .gate-mark{width:64px;height:64px;border-radius:50%;margin-bottom:18px;
     background:linear-gradient(180deg,#FFD9A8 0%, var(--coral) 65%, var(--alert) 100%);
     box-shadow: inset 0 -8px 14px rgba(0,0,0,0.12);}
@@ -118,8 +118,21 @@
   .other-rdv .day-heading{margin:14px 0 8px;}
 
   footer{text-align:center;padding:22px;font-size:11.5px;color:#a3a6b0;}
+  #footerCopyright{font-weight:700;margin-bottom:3px;}
 
   @media(max-width:600px){ main{padding:16px;} header{padding:16px;} }
+
+  .lang-btn{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--card);
+    cursor:pointer;font-size:12px;font-weight:800;color:var(--coral);}
+
+  .role-gate-badge{display:inline-block;margin:2px 0 30px;background:rgba(45,49,66,0.88);color:#fff;
+    padding:9px 20px;border-radius:999px;font-size:12.5px;font-weight:700;
+    box-shadow:0 10px 25px rgba(0,0,0,0.25);}
+
+  html[dir="rtl"] .field label, html[dir="rtl"] .toolbar, html[dir="rtl"] .rdv-card,
+  html[dir="rtl"] .brand, html[dir="rtl"] .header-actions{ text-align:right; }
+  html[dir="rtl"] .rdv-time{ order:2; }
+  html[dir="rtl"] .rdv-actions{ order:0; }
 </style>
 </head>
 <body>
@@ -130,19 +143,20 @@
 
 <!-- ================= ROLE GATE ================= -->
 <div id="roleGate">
+  <button class="lang-btn" id="langBtnGate" title="Changer de langue" style="position:absolute;top:18px;right:18px;">AR</button>
   <div class="gate-mark"></div>
-  <h1>RDV Cabinet</h1>
-  <p>Dr Hédi Belhoula</p>
+  <h1 id="roleGateTitle">RDV Médical</h1>
+  <div class="role-gate-badge" id="roleGateBadge">Cabinet Dr. Hédi Belhoula</div>
   <div class="role-choices">
     <div class="role-card" id="chooseAdmin">
       <div class="emoji">🩺</div>
-      <div class="label">Médecin</div>
-      <div class="desc">Gérer les rendez-vous</div>
+      <div class="label" id="roleAdminLabel">Médecin</div>
+      <div class="desc" id="roleAdminDesc">Gérer les rendez-vous</div>
     </div>
     <div class="role-card" id="chooseAdminPatient">
       <div class="emoji">📱</div>
-      <div class="label">Patient</div>
-      <div class="desc">Consulter mes RDV</div>
+      <div class="label" id="rolePatientLabel">Patient</div>
+      <div class="desc" id="rolePatientDesc">Consulter mes RDV</div>
     </div>
   </div>
   <div class="sync-note"><span class="sync-dot off" id="syncDot"></span><span id="syncLabel">Connexion…</span></div>
@@ -154,8 +168,7 @@
     <div class="brand">
       <div class="brand-mark"></div>
       <div>
-        <h1 id="appTitle">RDV Cabinet</h1>
-        <p>Dr Hédi Belhoula</p>
+        <h1 id="appTitle">Reminder CBH</h1>
       </div>
     </div>
     <div class="header-actions">
@@ -171,14 +184,14 @@
 
       <!-- login gate -->
       <div class="phone-gate" id="adminLoginWrap" style="display:none;">
-        <div class="display">Connexion médecin</div>
-        <p>Connecte-toi avec ton compte pour gérer les rendez-vous.</p>
+        <div class="display" id="adminLoginTitle">Connexion médecin</div>
+        <p id="adminLoginSub">Connecte-toi avec ton compte pour gérer les rendez-vous.</p>
         <div class="field">
-          <label>Email</label>
+          <label id="emailLabel">Email</label>
           <input type="email" id="adminEmail" placeholder="email@exemple.com">
         </div>
         <div class="field">
-          <label>Mot de passe</label>
+          <label id="passwordLabel">Mot de passe</label>
           <input type="password" id="adminPassword" placeholder="••••••••">
         </div>
         <button class="btn-primary" id="adminLoginBtn">Se connecter</button>
@@ -188,7 +201,7 @@
       <div id="adminContentWrap" style="display:none;">
         <div class="toolbar">
           <div>
-            <h2>Rendez-vous</h2>
+            <h2 id="rdvTitleLabel">Rendez-vous</h2>
             <div class="sub" id="summaryLine"></div>
           </div>
           <button class="btn-primary" id="addBtn">+ Fixer un RDV</button>
@@ -202,18 +215,29 @@
 
       <!-- step 1: phone entry -->
       <div class="phone-gate" id="phoneGate">
-        <div class="display">Mes rendez-vous</div>
-        <p>Entre ton numéro de téléphone. Tu recevras un code par SMS pour confirmer que c'est bien le tien.</p>
+        <div class="display" id="patientIntroTitle">Mes rendez-vous</div>
+        <p id="patientIntroSub">Entre ton numéro de téléphone pour accéder à tes rendez-vous.</p>
+        <p id="respectDateNote" style="color:var(--alert);font-size:12px;font-weight:600;margin:-14px 0 18px;">Prière de respecter la date du RDV indiqué.</p>
         <input type="tel" id="phoneInput" placeholder="Ex: 22 123 456">
-        <button class="btn-primary" id="phoneSubmit">Recevoir le code</button>
+        <button class="btn-primary" id="firstVisitBtn" style="margin-top:14px;width:100%;">Première visite</button>
+        <button class="btn-secondary" id="haveCodeBtn" style="margin-top:10px;width:100%;">J'ai déjà un code</button>
         <p class="error-text" id="phoneError" style="display:none;"></p>
-        <div id="recaptcha-container"></div>
       </div>
 
-      <!-- step 2: code verification -->
+      <!-- step 2a: new patient — show generated permanent code once -->
+      <div class="phone-gate" id="codeDisplayGate" style="display:none;">
+        <div class="display" id="codeNewTitle">Ton code personnel</div>
+        <p id="codeNewSub">Note bien ce code — il te sera demandé à chaque visite.</p>
+        <div style="font-family:'Fraunces';font-weight:700;font-size:40px;letter-spacing:.08em;
+          background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;
+          text-align:center;" id="codeDisplayValue">------</div>
+        <button class="btn-primary" id="codeContinueBtn" style="margin-top:16px;width:100%;">J'ai noté mon code, continuer</button>
+      </div>
+
+      <!-- step 2b: returning patient — enter existing permanent code -->
       <div class="phone-gate" id="codeGate" style="display:none;">
-        <div class="display">Code reçu par SMS</div>
-        <p id="codeSentTo">Entre le code à 6 chiffres reçu par SMS.</p>
+        <div class="display" id="codeEnterTitle">Entre ton code</div>
+        <p id="codeEnterSub">Le code personnel à 6 chiffres reçu lors de ta première visite.</p>
         <input type="text" id="codeInput" inputmode="numeric" placeholder="123456">
         <button class="btn-primary" id="codeSubmit">Vérifier</button>
         <p class="error-text" id="codeError" style="display:none;"></p>
@@ -228,7 +252,12 @@
     </section>
   </main>
 
-  <footer>Dr Hédi Belhoula — outil interne de gestion des rendez-vous</footer>
+  <footer id="footerText">
+    <div id="footerCopyright">Dr Hédi Belhoula © 2026</div>
+    <div id="footerSub">outil interne de gestion des rendez-vous</div>
+    <div id="footerAddress" style="margin-top:8px;">Route de Tunis km9, Cité El Ons</div>
+    <div><span id="footerPhoneLabel">N° Tél</span> : 98 419669</div>
+  </footer>
 </div>
 
 <!-- ================= ADD/EDIT MODAL (admin) ================= -->
@@ -236,36 +265,50 @@
   <div class="modal">
     <h3 id="modalTitle">Fixer un rendez-vous</h3>
     <div class="field">
-      <label>Nom du patient</label>
-      <input type="text" id="fName" placeholder="Nom et prénom">
+      <label id="nameLabel">Nom du patient</label>
+      <input type="text" id="fName" placeholder="Nom et prénom" list="nameSuggestions" autocomplete="off">
+      <datalist id="nameSuggestions"></datalist>
     </div>
     <div class="field">
-      <label>Numéro de téléphone</label>
+      <label id="phoneFieldLabel">Numéro de téléphone</label>
       <input type="tel" id="fPhone" placeholder="Ex: 22 123 456">
-      <div class="field-hint">Format tunisien à 8 chiffres — sera enregistré comme +216XXXXXXXX</div>
+      <div class="field-hint" id="phoneFieldHint">Format tunisien à 8 chiffres — sera enregistré comme +216XXXXXXXX</div>
     </div>
     <div class="field-row">
       <div class="field">
-        <label>Date</label>
+        <label id="dateLabel">Date</label>
         <input type="date" id="fDate">
       </div>
       <div class="field">
-        <label>Heure</label>
+        <label id="timeLabel">Heure</label>
         <input type="time" id="fTime" value="09:00">
       </div>
     </div>
     <div class="field">
-      <label>Motif / pathologie</label>
+      <label id="reasonLabel">Motif / pathologie</label>
       <select id="fReason"></select>
     </div>
     <div class="field">
-      <label>Notes (optionnel)</label>
+      <label id="notesLabel">Notes (optionnel)</label>
       <textarea id="fNotes" rows="2" placeholder="Notes internes"></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn-secondary" id="cancelBtn">Annuler</button>
       <button class="btn-primary wide" id="saveBtn">Enregistrer</button>
     </div>
+  </div>
+</div>
+
+<!-- ================= REMINDER POPUP (1er / 2eme rappel — patient) ================= -->
+<div class="overlay" id="reminderOverlay">
+  <div class="modal" style="max-width:360px;text-align:center;">
+    <div id="reminderBadge" style="width:52px;height:52px;border-radius:50%;margin:0 auto 14px;
+      display:flex;align-items:center;justify-content:center;font-family:'Fraunces';font-weight:700;font-size:22px;color:#fff;
+      background:linear-gradient(180deg,#FFD9A8 0%, var(--coral) 65%, var(--alert) 100%);">1</div>
+    <h3 id="reminderTitle" style="margin-bottom:8px;">Rappel de rendez-vous</h3>
+    <p id="reminderMsg" style="color:#6b6f80;font-size:14px;margin:0 0 10px;"></p>
+    <p id="reminderDate" style="font-weight:700;font-size:14.5px;margin:0 0 18px;"></p>
+    <button class="btn-primary wide" id="reminderOkBtn" style="width:100%;">Compris</button>
   </div>
 </div>
 
