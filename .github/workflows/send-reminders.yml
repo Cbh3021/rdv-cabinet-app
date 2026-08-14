@@ -20,9 +20,11 @@ jobs:
           node-version: '22'
 
       - name: Installer les dépendances
-        run: npm install firebase-admin
+        working-directory: scripts
+        run: npm install
 
       - name: Envoyer les rappels
+        working-directory: scripts
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: node scripts/send-reminders.js
+        run: node send-reminders.js
