@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">RDV Cabinet</string>
-    <string name="title_activity_main">RDV Cabinet</string>
+    <string name="app_name">RDV CBH</string>
+    <string name="title_activity_main">RDV CBH</string>
     <string name="package_name">com.belhoula.rdvcabinet</string>
     <string name="custom_url_scheme">com.belhoula.rdvcabinet</string>
 </resources>

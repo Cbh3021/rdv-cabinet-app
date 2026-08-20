@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.belhoula.rdvcabinet',
-  appName: 'RDV Cabinet',
+  appName: 'RDV CBH',
   webDir: 'www',
   plugins: {
     FirebaseAuthentication: {

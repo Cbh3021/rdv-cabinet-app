@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "783489025252",
+    "project_id": "rdv-cabinet-belhoula",
+    "storage_bucket": "rdv-cabinet-belhoula.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:783489025252:android:bef40ba0a95a63cb4fd8f1",
+        "android_client_info": {
+          "package_name": "com.belhoula.rdvcabinet"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDkn1XeJ7A7PBm6R0eWLjhP_m-Pt8Byz3Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
