@@ -3,7 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Reminder CBH — Dr Hédi Belhoula</title>
+<meta name="color-scheme" content="light dark">
+<title>Reminder CBH â€” Dr HÃ©di Belhoula</title>
+<script>
+// Anti-flash de thÃ¨me : pose data-theme AVANT le premier rendu, donc avant
+// que app.js (chargÃ© en <script type="module"> tout en bas de la page) ait
+// eu le temps de s'exÃ©cuter. Sans Ã§a, l'appli peint d'abord le thÃ¨me clair
+// par dÃ©faut puis bascule en sombre une fois app.js chargÃ© â€” flash trÃ¨s
+// visible juste aprÃ¨s un vidage de cache, quand app.js met plus longtemps
+// Ã  se tÃ©lÃ©charger. Doit rester synchrone et rester en tÃªte du <head>.
+// La valeur par dÃ©faut ('light') doit rester identique Ã  celle d'app.js
+// (let theme = localStorage.getItem('rdvTheme') || 'light';).
+(function(){
+  try{
+    var t = localStorage.getItem('rdvTheme');
+    document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+  }catch(e){}
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -11,9 +28,27 @@
     --cream:#FFF8F0; --coral:#FF7B54; --amber:#FFB26B; --ink:#2D3142;
     --teal:#3FA9A2; --alert:#E0533D; --card:#FFFFFF;
     --line: rgba(45,49,66,0.10); --shadow: 0 10px 30px rgba(45,49,66,0.08);
+    --muted:var(--muted); --muted2:var(--muted2); --btn2:#F0E9DD; --btn2-hover:#e6ddcc;
+  }
+  html[data-theme="dark"]{
+    --cream:#1B1D27; --card:#262837; --ink:#F0EEE9;
+    --line: rgba(255,255,255,0.12); --shadow: 0 10px 30px rgba(0,0,0,0.4);
+    --muted:#AEB2C4; --muted2:#8489A0; --btn2:#333650; --btn2-hover:#3d4160;
   }
   *{box-sizing:border-box;}
-  body{margin:0;background:var(--cream);color:var(--ink);font-family:'Manrope',sans-serif;-webkit-font-smoothing:antialiased;}
+  /* Empeche le WebView Android de plaquer son propre style natif (parfois
+     fond sombre + texte sombre) par-dessus nos boutons en mode sombre â€”
+     meme cause que le bug email/mot de passe deja corrige sur les inputs. */
+  button{appearance:none;-webkit-appearance:none;font-family:inherit;color:inherit;}
+  .honor-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-left:8px;
+    vertical-align:middle;box-shadow:0 0 0 2px var(--card);flex-shrink:0;}
+  .honor-dot-empty{display:none !important;}
+  .honor-summary{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;
+    font-size:12.5px;color:var(--muted);}
+  .honor-summary .honor-dot{width:14px;height:14px;margin-left:0;}
+  html{color-scheme:light;}
+  html[data-theme="dark"]{color-scheme:dark;}
+  body{margin:0;background:var(--cream);color:var(--ink);font-family:'Manrope',sans-serif;-webkit-font-smoothing:antialiased;transition:background .15s,color .15s;}
   h1,h2,h3,.display{font-family:'Fraunces',serif;}
 
   #configBanner{display:none;background:var(--alert);color:#fff;padding:12px 18px;font-size:13px;text-align:center;font-weight:600;}
@@ -25,15 +60,15 @@
     background:linear-gradient(180deg,#FFD9A8 0%, var(--coral) 65%, var(--alert) 100%);
     box-shadow: inset 0 -8px 14px rgba(0,0,0,0.12);}
   #roleGate h1{font-size:26px;margin:0 0 4px;font-weight:600;}
-  #roleGate p{color:#6b6f80;margin:0 0 30px;font-size:14px;}
+  #roleGate p{color:var(--muted);margin:0 0 30px;font-size:14px;}
   .role-choices{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;}
   .role-card{width:180px;padding:26px 18px;border-radius:20px;background:var(--card);border:1px solid var(--line);
     box-shadow:var(--shadow);cursor:pointer;transition:.2s;}
   .role-card:hover{transform:translateY(-3px);border-color:var(--coral);}
   .role-card .emoji{font-size:30px;margin-bottom:10px;}
   .role-card .label{font-weight:700;font-size:15px;}
-  .role-card .desc{font-size:12px;color:#6b6f80;margin-top:4px;}
-  .sync-note{margin-top:26px;font-size:11.5px;color:#8a8d99;display:flex;align-items:center;gap:6px;}
+  .role-card .desc{font-size:12px;color:var(--muted);margin-top:4px;}
+  .sync-note{margin-top:26px;font-size:11.5px;color:var(--muted2);display:flex;align-items:center;gap:6px;}
   .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--teal);}
   .sync-dot.off{background:var(--alert);}
 
@@ -44,37 +79,69 @@
   .brand-mark{width:36px;height:36px;border-radius:50%;
     background:linear-gradient(180deg,#FFD9A8 0%, var(--coral) 65%, var(--alert) 100%);}
   .brand h1{font-size:17px;margin:0;font-weight:600;}
-  .brand p{margin:0;font-size:12px;color:#6b6f80;}
-  .header-actions{display:flex;align-items:center;gap:10px;}
-  .icon-btn{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--card);
-    cursor:pointer;font-size:16px;}
-  .switch-btn{border:none;background:#F0E9DD;padding:9px 16px;border-radius:999px;font-size:12.5px;font-weight:700;cursor:pointer;}
+  .brand p{margin:0;font-size:12px;color:var(--muted);}
+  .header-actions{display:flex;align-items:center;gap:8px;}
+  .icon-btn{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--ink);
+    appearance:none;-webkit-appearance:none;
+    cursor:pointer;font-size:16px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .icon-btn:hover{border-color:var(--coral);}
+  .switch-btn{border:none;background:var(--btn2);padding:9px 16px;border-radius:999px;font-size:12.5px;font-weight:700;cursor:pointer;}
+
+  /* ---------- dropdown / overflow menus (â‹®) ---------- */
+  .dropdown{position:relative;display:inline-flex;}
+  .dropdown-menu{position:absolute;top:calc(100% + 8px);right:0;background:#2D3142 !important;border:1px solid rgba(255,255,255,0.12);
+    border-radius:14px;box-shadow:0 16px 36px rgba(45,49,66,0.16);min-width:200px;padding:6px;z-index:60;
+    opacity:0;transform:translateY(-4px) scale(.98);pointer-events:none;transition:.14s ease;}
+  .dropdown-menu.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+  .dropdown-item{display:flex;align-items:center;gap:9px;width:100%;padding:10px 11px;border:none;background:none;
+    border-radius:9px;font-family:'Manrope';font-size:13.5px;font-weight:700;color:#fff !important;cursor:pointer;
+    text-align:left;white-space:nowrap;}
+  .dropdown-item:hover{background:rgba(255,255,255,0.12);}
+  .dropdown-item.danger{color:#FF8A75 !important;}
+  .dropdown-divider{height:1px;background:rgba(255,255,255,0.14);margin:6px 4px;}
+  html[dir="rtl"] .dropdown-menu{right:auto;left:0;}
+  html[dir="rtl"] .dropdown-item{text-align:right;}
 
   main{padding:24px;max-width:900px;margin:0 auto 60px;}
 
   /* ---------- admin ---------- */
-  .toolbar{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;gap:14px;flex-wrap:wrap;}
+  .toolbar{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px;gap:14px;flex-wrap:wrap;}
   .toolbar h2{font-size:22px;margin:0;font-weight:600;}
-  .toolbar .sub{font-size:13px;color:#6b6f80;margin-top:3px;}
+  .toolbar .sub{font-size:13px;color:var(--muted);margin-top:3px;}
+  .toolbar-row2{display:flex;align-items:center;gap:8px;margin-bottom:18px;}
+  .toolbar-row2 input{flex:1;min-width:0;padding:11px 14px;border-radius:12px;border:1px solid var(--line);
+    background:var(--card);font-family:'Manrope';font-size:13.5px;color:var(--ink);}
   .btn-primary{background:var(--coral);color:#fff;border:none;padding:12px 20px;border-radius:12px;
     font-weight:700;font-size:14px;cursor:pointer;box-shadow:var(--shadow);}
   .btn-primary:hover{background:#f5643a;}
   .btn-primary:disabled{opacity:.5;cursor:not-allowed;}
 
   .rdv-list{display:flex;flex-direction:column;gap:12px;}
-  .day-heading{font-size:12.5px;font-weight:800;color:#8a8d99;text-transform:uppercase;letter-spacing:.04em;
+  .day-heading{font-size:12.5px;font-weight:800;color:var(--muted2);text-transform:uppercase;letter-spacing:.04em;
     margin:18px 0 8px;}
   .rdv-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;
-    display:flex;align-items:center;gap:14px;box-shadow:var(--shadow);}
-  .rdv-time{font-family:'Fraunces';font-weight:700;font-size:18px;min-width:56px;text-align:center;}
-  .rdv-info{flex:1;}
-  .rdv-info .name{font-weight:700;font-size:15px;}
-  .rdv-info .meta{font-size:12.5px;color:#6b6f80;margin-top:2px;}
-  .status-pill{font-size:10.5px;font-weight:800;padding:4px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;}
-  .rdv-actions{display:flex;gap:6px;}
-  .mini-btn{border:none;background:#F0E9DD;width:30px;height:30px;border-radius:9px;cursor:pointer;font-size:13px;}
+    display:flex;flex-direction:column;align-items:stretch;gap:0;box-shadow:var(--shadow);transition:box-shadow .15s;}
+  .rdv-card:hover{box-shadow:0 14px 34px rgba(45,49,66,0.12);}
+  .rdv-row{display:flex;align-items:center;gap:12px;}
+  .rdv-time{font-family:'Fraunces';font-weight:700;font-size:18px;min-width:52px;text-align:center;}
+  .rdv-info{flex:1;min-width:0;}
+  .rdv-info .name{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .rdv-info .meta{font-size:12.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .status-pill{font-size:10.5px;font-weight:800;padding:4px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;flex-shrink:0;}
+  .menu-btn{border:none;background:var(--btn2);width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:16px;
+    line-height:1;color:var(--ink);flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;}
+  .menu-btn:hover{background:var(--btn2-hover);}
+  .pending-request{margin-top:14px;padding:10px 12px;background:#FFF3E0;border-radius:12px;font-size:13px;color:#8a5a1f;text-align:left;}
+  .mini-link{display:block;background:none;border:none;color:var(--coral);font-size:12.5px;font-weight:700;margin-top:6px;padding:0;cursor:pointer;text-decoration:underline;}
+  .honor-badge{margin-top:10px;padding:8px 10px;border-radius:10px;font-size:12.5px;display:flex;justify-content:space-between;align-items:center;}
+  .honor-badge.honor-yes{background:#E3F5EC;color:#1f8a54;}
+  .honor-badge.honor-no{background:#FCE8E8;color:#c0392b;}
+  .honor-badge .mini-link{margin:0;font-size:11.5px;color:inherit;text-decoration:underline;}
+  .honor-tag{display:inline-block;margin-top:4px;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:8px;}
+  .honor-tag.honor-yes{background:#E3F5EC;color:#1f8a54;}
+  .honor-tag.honor-no{background:#FCE8E8;color:#c0392b;}
 
-  .empty{text-align:center;padding:60px 20px;color:#8a8d99;}
+  .empty{text-align:center;padding:60px 20px;color:var(--muted2);}
   .empty .display{font-size:20px;color:var(--ink);margin-bottom:6px;}
 
   /* ---------- modal ---------- */
@@ -84,22 +151,29 @@
     max-height:90vh;overflow:auto;}
   .modal h3{margin:0 0 16px;font-size:19px;font-weight:600;}
   .field{margin-bottom:13px;}
-  .field label{display:block;font-size:12px;font-weight:700;color:#6b6f80;margin-bottom:5px;text-transform:uppercase;letter-spacing:.03em;}
+  .field-pw-wrap{position:relative;}
+  .field-pw-wrap input{padding-right:42px !important;}
+  .field-pw-toggle{position:absolute;top:50%;right:6px;transform:translateY(-50%);
+    width:30px;height:30px;border:none;background:transparent;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;font-size:16px;
+    color:var(--muted);border-radius:8px;}
+  .field-pw-toggle:hover{color:var(--ink);background:var(--btn2);}
+  .field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.03em;}
   .field input, .field select, .field textarea{width:100%;padding:11px 13px;border-radius:10px;border:1px solid var(--line);
-    font-family:'Manrope';font-size:14.5px;background:#fff;}
+    font-family:'Manrope';font-size:14.5px;background:var(--card);color:var(--ink);}
   .field-row{display:flex;gap:10px;}
   .field-row .field{flex:1;}
-  .field-hint{font-size:11px;color:#8a8d99;margin-top:4px;}
+  .field-hint{font-size:11px;color:var(--muted2);margin-top:4px;}
   .modal-actions{display:flex;gap:10px;margin-top:18px;}
-  .btn-secondary{flex:1;background:#F0E9DD;border:none;padding:12px;border-radius:12px;font-weight:700;cursor:pointer;}
+  .btn-secondary{flex:1;background:var(--btn2);border:none;padding:12px;border-radius:12px;font-weight:700;cursor:pointer;}
   .btn-primary.wide{flex:1;}
 
   /* ---------- login / phone-gate style screens ---------- */
   .phone-gate{max-width:380px;margin:40px auto;text-align:center;}
   .phone-gate .display{font-size:22px;margin-bottom:6px;}
-  .phone-gate p{color:#6b6f80;font-size:13.5px;margin-bottom:22px;}
+  .phone-gate p{color:var(--muted);font-size:13.5px;margin-bottom:22px;}
   .phone-gate input{width:100%;padding:14px 16px;border-radius:14px;border:1px solid var(--line);
-    font-size:16px;text-align:center;letter-spacing:.02em;background:var(--card);}
+    font-size:16px;text-align:center;letter-spacing:.02em;background:var(--card);color:var(--ink);}
   .phone-gate button.btn-primary{margin-top:14px;width:100%;}
   .phone-gate .field{text-align:left;margin-top:12px;}
   .phone-gate .field label{margin-bottom:5px;}
@@ -108,19 +182,27 @@
 
   .patient-hero{max-width:460px;margin:6px auto 20px;background:var(--card);border-radius:24px;
     padding:32px 28px;box-shadow:var(--shadow);text-align:center;border:1px solid var(--line);}
-  .patient-hero .path-tag{font-size:12.5px;color:#6b6f80;margin-bottom:18px;}
+  .patient-hero .path-tag{font-size:12.5px;color:var(--muted);margin-bottom:18px;}
   .patient-hero .big-days{font-family:'Fraunces';font-size:50px;font-weight:700;margin:6px 0 2px;line-height:1;}
-  .patient-hero .big-days-label{font-size:12.5px;color:#6b6f80;text-transform:uppercase;letter-spacing:.06em;font-weight:700;}
-  .patient-hero .date-line{margin-top:16px;font-size:13px;color:#6b6f80;}
+  .patient-hero .big-days-label{font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;}
+  .patient-hero .date-line{margin-top:16px;font-size:13px;color:var(--muted);}
   .patient-hero .status-pill{margin-top:16px;font-size:12px;display:inline-block;padding:6px 14px;border-radius:999px;color:#fff;}
 
   .other-rdv{max-width:460px;margin:0 auto;}
   .other-rdv .day-heading{margin:14px 0 8px;}
 
+  .patient-greeting{max-width:460px;margin:0 auto 14px;font-family:'Fraunces',serif;font-size:19px;font-weight:600;
+    color:var(--ink);text-align:center;}
+  html[dir="rtl"] .patient-greeting{text-align:center;}
+
   footer{text-align:center;padding:22px;font-size:11.5px;color:#a3a6b0;}
   #footerCopyright{font-weight:700;margin-bottom:3px;}
 
-  @media(max-width:600px){ main{padding:16px;} header{padding:16px;} }
+  @media(max-width:600px){
+    main{padding:16px;} header{padding:16px;}
+    .toolbar{flex-direction:column;align-items:stretch;}
+    .toolbar .btn-primary{width:100%;}
+  }
 
   .lang-btn{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--card);
     cursor:pointer;font-size:12px;font-weight:800;color:var(--coral);}
@@ -132,34 +214,35 @@
   html[dir="rtl"] .field label, html[dir="rtl"] .toolbar, html[dir="rtl"] .rdv-card,
   html[dir="rtl"] .brand, html[dir="rtl"] .header-actions{ text-align:right; }
   html[dir="rtl"] .rdv-time{ order:2; }
-  html[dir="rtl"] .rdv-actions{ order:0; }
+  html[dir="rtl"] .dropdown{ order:0; }
 </style>
 </head>
 <body>
 
 <div id="configBanner">
-  ⚠️ Firebase non configuré — édite <code>firebaseConfig</code> en haut du fichier avec les clés de ton projet Firebase pour activer la synchronisation et l'authentification. L'appli fonctionne pour l'instant en mode local (pas de sync, pas de connexion requise).
+  âš ï¸ Firebase non configurÃ© â€” Ã©dite <code>firebaseConfig</code> en haut du fichier avec les clÃ©s de ton projet Firebase pour activer la synchronisation et l'authentification. L'appli fonctionne pour l'instant en mode local (pas de sync, pas de connexion requise).
 </div>
 
 <!-- ================= ROLE GATE ================= -->
 <div id="roleGate">
   <button class="lang-btn" id="langBtnGate" title="Changer de langue" style="position:absolute;top:18px;right:18px;">AR</button>
+  <button class="icon-btn" id="themeBtnGate" title="Changer de thÃ¨me" style="position:absolute;top:18px;right:66px;">ðŸŒ™</button>
   <div class="gate-mark"></div>
-  <h1 id="roleGateTitle">RDV Médical</h1>
-  <div class="role-gate-badge" id="roleGateBadge">Cabinet Dr. Hédi Belhoula</div>
+  <h1 id="roleGateTitle">RDV MÃ©dical</h1>
+  <div class="role-gate-badge" id="roleGateBadge">Cabinet Dr. HÃ©di Belhoula</div>
   <div class="role-choices">
     <div class="role-card" id="chooseAdmin">
-      <div class="emoji">🩺</div>
-      <div class="label" id="roleAdminLabel">Médecin</div>
-      <div class="desc" id="roleAdminDesc">Gérer les rendez-vous</div>
+      <div class="emoji">ðŸ©º</div>
+      <div class="label" id="roleAdminLabel">MÃ©decin</div>
+      <div class="desc" id="roleAdminDesc">GÃ©rer les rendez-vous</div>
     </div>
     <div class="role-card" id="chooseAdminPatient">
-      <div class="emoji">📱</div>
+      <div class="emoji">ðŸ“±</div>
       <div class="label" id="rolePatientLabel">Patient</div>
       <div class="desc" id="rolePatientDesc">Consulter mes RDV</div>
     </div>
   </div>
-  <div class="sync-note"><span class="sync-dot off" id="syncDot"></span><span id="syncLabel">Connexion…</span></div>
+  <div class="sync-note"><span class="sync-dot off" id="syncDot"></span><span id="syncLabel">Connexionâ€¦</span></div>
 </div>
 
 <!-- ================= APP SHELL ================= -->
@@ -172,9 +255,15 @@
       </div>
     </div>
     <div class="header-actions">
-      <button class="icon-btn" id="muteBtn" title="Couper le son">🔊</button>
-      <button class="switch-btn" id="signOutBtn" style="display:none;">Se déconnecter</button>
-      <button class="switch-btn" id="switchRoleBtn">Changer de vue</button>
+      <button class="icon-btn" id="themeToggleBtn" title="Changer de thÃ¨me">ðŸŒ™</button>
+      <button class="icon-btn" id="muteBtn" title="Couper le son">ðŸ”Š</button>
+      <div class="dropdown">
+        <button class="icon-btn" id="headerMenuBtn" data-menu-toggle title="Plus d'options">â‹®</button>
+        <div class="dropdown-menu" id="headerMenu">
+          <button class="dropdown-item" id="switchRoleBtn">Changer de vue</button>
+          <button class="dropdown-item" id="signOutBtn" style="display:none;">Se dÃ©connecter</button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -184,15 +273,18 @@
 
       <!-- login gate -->
       <div class="phone-gate" id="adminLoginWrap" style="display:none;">
-        <div class="display" id="adminLoginTitle">Connexion médecin</div>
-        <p id="adminLoginSub">Connecte-toi avec ton compte pour gérer les rendez-vous.</p>
+        <div class="display" id="adminLoginTitle">Connexion mÃ©decin</div>
+        <p id="adminLoginSub">Connecte-toi avec ton compte pour gÃ©rer les rendez-vous.</p>
         <div class="field">
           <label id="emailLabel">Email</label>
           <input type="email" id="adminEmail" placeholder="email@exemple.com">
         </div>
         <div class="field">
           <label id="passwordLabel">Mot de passe</label>
-          <input type="password" id="adminPassword" placeholder="••••••••">
+          <div class="field-pw-wrap">
+            <input type="password" id="adminPassword" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢">
+            <button type="button" class="field-pw-toggle" id="adminPasswordToggle" title="Afficher/masquer le mot de passe" aria-label="Afficher/masquer le mot de passe">ðŸ‘ï¸</button>
+          </div>
         </div>
         <button class="btn-primary" id="adminLoginBtn">Se connecter</button>
         <p class="error-text" id="adminLoginError" style="display:none;"></p>
@@ -206,6 +298,18 @@
           </div>
           <button class="btn-primary" id="addBtn">+ Fixer un RDV</button>
         </div>
+        <div class="toolbar-row2">
+          <input type="text" id="adminSearchInput" placeholder="ðŸ”Ž Chercher un nom ou numÃ©roâ€¦">
+          <div class="dropdown">
+            <button class="icon-btn" id="toolbarMenuBtn" data-menu-toggle title="Plus d'actions">â‹®</button>
+            <div class="dropdown-menu" id="toolbarMenu">
+              <button class="dropdown-item" id="exportCsvBtn">â¬‡ï¸ Exporter en CSV</button>
+              <button class="dropdown-item" id="trashBtn">ðŸ—‘ï¸ Corbeille</button>
+              <div class="dropdown-divider"></div>
+              <button class="dropdown-item" id="findCodeBtn">ðŸ”‘ Code patient</button>
+            </div>
+          </div>
+        </div>
         <div class="rdv-list" id="rdvList"></div>
       </div>
     </section>
@@ -213,39 +317,22 @@
     <!-- ---------- PATIENT VIEW ---------- -->
     <section id="patientView" style="display:none;">
 
-      <!-- step 1: phone entry -->
+      <!-- phone + code entry (compte crÃ©Ã© par le mÃ©decin, pas d'auto-inscription) -->
       <div class="phone-gate" id="phoneGate">
         <div class="display" id="patientIntroTitle">Mes rendez-vous</div>
-        <p id="patientIntroSub">Entre ton numéro de téléphone pour accéder à tes rendez-vous.</p>
-        <p id="respectDateNote" style="color:var(--alert);font-size:12px;font-weight:600;margin:-14px 0 18px;">Prière de respecter la date du RDV indiqué.</p>
+        <p id="patientIntroSub">Entre ton numÃ©ro et le code personnel remis par le cabinet pour accÃ©der Ã  tes rendez-vous.</p>
+        <p id="respectDateNote" style="color:var(--alert);font-size:12px;font-weight:600;margin:-14px 0 18px;">PriÃ¨re de respecter la date du RDV indiquÃ©.</p>
         <input type="tel" id="phoneInput" placeholder="Ex: 22 123 456">
-        <button class="btn-primary" id="firstVisitBtn" style="margin-top:14px;width:100%;">Première visite</button>
-        <button class="btn-secondary" id="haveCodeBtn" style="margin-top:10px;width:100%;">J'ai déjà un code</button>
+        <label id="codeFieldLabel" style="display:block;font-size:12.5px;font-weight:700;margin:12px 0 6px;">Code personnel</label>
+        <input type="text" id="codeInput" inputmode="numeric" placeholder="123456">
+        <button class="btn-primary" id="patientLoginBtn" style="margin-top:14px;width:100%;">AccÃ©der Ã  mes rendez-vous</button>
         <p class="error-text" id="phoneError" style="display:none;"></p>
       </div>
 
-      <!-- step 2a: new patient — show generated permanent code once -->
-      <div class="phone-gate" id="codeDisplayGate" style="display:none;">
-        <div class="display" id="codeNewTitle">Ton code personnel</div>
-        <p id="codeNewSub">Note bien ce code — il te sera demandé à chaque visite.</p>
-        <div style="font-family:'Fraunces';font-weight:700;font-size:40px;letter-spacing:.08em;
-          background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;
-          text-align:center;" id="codeDisplayValue">------</div>
-        <button class="btn-primary" id="codeContinueBtn" style="margin-top:16px;width:100%;">J'ai noté mon code, continuer</button>
-      </div>
-
-      <!-- step 2b: returning patient — enter existing permanent code -->
-      <div class="phone-gate" id="codeGate" style="display:none;">
-        <div class="display" id="codeEnterTitle">Entre ton code</div>
-        <p id="codeEnterSub">Le code personnel à 6 chiffres reçu lors de ta première visite.</p>
-        <input type="text" id="codeInput" inputmode="numeric" placeholder="123456">
-        <button class="btn-primary" id="codeSubmit">Vérifier</button>
-        <p class="error-text" id="codeError" style="display:none;"></p>
-        <button class="link-btn" id="backToPhoneBtn">Changer de numéro</button>
-      </div>
-
-      <!-- step 3: results -->
+      <!-- results -->
       <div id="patientResultWrap" style="display:none;">
+        <div id="patientGreeting"></div>
+        <div id="notifBanner" style="display:none;margin-bottom:16px;"></div>
         <div id="patientHeroWrap"></div>
         <div class="other-rdv" id="otherRdvWrap"></div>
       </div>
@@ -253,10 +340,10 @@
   </main>
 
   <footer id="footerText">
-    <div id="footerCopyright">Dr Hédi Belhoula © 2026</div>
+    <div id="footerCopyright">Dr HÃ©di Belhoula Â© 2026</div>
     <div id="footerSub">outil interne de gestion des rendez-vous</div>
-    <div id="footerAddress" style="margin-top:8px;">Route de Tunis km9, Cité El Ons</div>
-    <div><span id="footerPhoneLabel">N° Tél</span> : 98 419669</div>
+    <div id="footerAddress" style="margin-top:8px;">Route de Tunis km9, CitÃ© El Ons</div>
+    <div><span id="footerPhoneLabel">NÂ° TÃ©l</span> : 98 419669</div>
   </footer>
 </div>
 
@@ -266,13 +353,13 @@
     <h3 id="modalTitle">Fixer un rendez-vous</h3>
     <div class="field">
       <label id="nameLabel">Nom du patient</label>
-      <input type="text" id="fName" placeholder="Nom et prénom" list="nameSuggestions" autocomplete="off">
+      <input type="text" id="fName" placeholder="Nom et prÃ©nom" list="nameSuggestions" autocomplete="off">
       <datalist id="nameSuggestions"></datalist>
     </div>
     <div class="field">
-      <label id="phoneFieldLabel">Numéro de téléphone</label>
+      <label id="phoneFieldLabel">NumÃ©ro de tÃ©lÃ©phone</label>
       <input type="tel" id="fPhone" placeholder="Ex: 22 123 456">
-      <div class="field-hint" id="phoneFieldHint">Format tunisien à 8 chiffres — sera enregistré comme +216XXXXXXXX</div>
+      <div class="field-hint" id="phoneFieldHint">Format tunisien Ã  8 chiffres â€” sera enregistrÃ© comme +216XXXXXXXX</div>
     </div>
     <div class="field-row">
       <div class="field">
@@ -292,6 +379,18 @@
       <label id="notesLabel">Notes (optionnel)</label>
       <textarea id="fNotes" rows="2" placeholder="Notes internes"></textarea>
     </div>
+    <div class="field" id="recurrenceWrap">
+      <label>RÃ©pÃ©ter automatiquement (suivi chronique / APCI)</label>
+      <select id="fRecurrenceInterval">
+        <option value="none">Aucune rÃ©pÃ©tition</option>
+        <option value="4w">Toutes les 4 semaines</option>
+        <option value="monthly">Tous les mois</option>
+        <option value="2m">Tous les 2 mois</option>
+        <option value="3m">Tous les 3 mois</option>
+        <option value="6m">Tous les 6 mois</option>
+      </select>
+      <p style="font-size:12px;color:var(--muted);margin:6px 0 0;">DÃ¨s que ce RDV sera marquÃ© "âœ… HonorÃ©", le suivant sera crÃ©Ã© automatiquement Ã  cet intervalle. Marque "Aucune rÃ©pÃ©tition" pour arrÃªter la chaÃ®ne.</p>
+    </div>
     <div class="modal-actions">
       <button class="btn-secondary" id="cancelBtn">Annuler</button>
       <button class="btn-primary wide" id="saveBtn">Enregistrer</button>
@@ -299,19 +398,196 @@
   </div>
 </div>
 
-<!-- ================= REMINDER POPUP (1er / 2eme rappel — patient) ================= -->
+<!-- ================= REMINDER POPUP (1er / 2eme rappel â€” patient) ================= -->
 <div class="overlay" id="reminderOverlay">
   <div class="modal" style="max-width:360px;text-align:center;">
     <div id="reminderBadge" style="width:52px;height:52px;border-radius:50%;margin:0 auto 14px;
       display:flex;align-items:center;justify-content:center;font-family:'Fraunces';font-weight:700;font-size:22px;color:#fff;
       background:linear-gradient(180deg,#FFD9A8 0%, var(--coral) 65%, var(--alert) 100%);">1</div>
     <h3 id="reminderTitle" style="margin-bottom:8px;">Rappel de rendez-vous</h3>
-    <p id="reminderMsg" style="color:#6b6f80;font-size:14px;margin:0 0 10px;"></p>
+    <p id="reminderMsg" style="color:var(--muted);font-size:14px;margin:0 0 10px;"></p>
     <p id="reminderDate" style="font-weight:700;font-size:14.5px;margin:0 0 18px;"></p>
     <button class="btn-primary wide" id="reminderOkBtn" style="width:100%;">Compris</button>
   </div>
 </div>
 
-<script src="app.js"></script>
+<!-- ================= CODE PATIENT GÃ‰NÃ‰RÃ‰ (popup admin, Ã  remettre au patient) ================= -->
+<div class="overlay" id="patientCodeOverlay">
+  <div class="modal" style="max-width:360px;text-align:center;">
+    <div class="display" id="patientCodeTitle" style="margin-bottom:8px;">Code patient gÃ©nÃ©rÃ©</div>
+    <p id="patientCodeSub" style="color:var(--muted);font-size:13px;margin:0 0 14px;">Note ce code et donne-le au patient â€” il lui sera demandÃ© Ã  chaque connexion.</p>
+    <div style="font-family:'Fraunces';font-weight:700;font-size:40px;letter-spacing:.08em;
+      background:var(--cream);border:1px solid var(--line);border-radius:16px;padding:18px;
+      text-align:center;" id="patientCodeValue">------</div>
+    <button class="btn-primary" id="patientCodeOkBtn" style="margin-top:16px;width:100%;">OK, notÃ©</button>
+  </div>
+</div>
+
+<!-- ================= RETROUVER LE CODE D'UN PATIENT (admin) ================= -->
+<div class="overlay" id="findCodeOverlay">
+  <div class="modal" style="max-width:360px;">
+    <h3 style="margin-bottom:8px;">Retrouver un code patient</h3>
+    <p style="color:var(--muted);font-size:13px;margin:0 0 14px;">Entre le numÃ©ro de tÃ©lÃ©phone du patient pour retrouver son code de connexion.</p>
+    <label style="font-size:13px;font-weight:600;">TÃ©lÃ©phone</label>
+    <input type="tel" id="findCodePhone" placeholder="12 345 678" style="width:100%;margin:6px 0 6px;padding:10px;border-radius:10px;border:1px solid var(--line);color:var(--ink);background:#fff;">
+    <p class="error-text" id="findCodeError" style="display:none;color:var(--alert);font-size:13px;margin:4px 0 0;"></p>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button class="btn-secondary" id="findCodeCancelBtn">Annuler</button>
+      <button class="btn-primary wide" id="findCodeSubmitBtn">Chercher</button>
+    </div>
+    <button class="btn-secondary" id="deletePatientBtn" style="width:100%;margin-top:8px;color:var(--alert);display:none;">ðŸ—‘ Supprimer ce patient</button>
+
+    <div id="resetCodeSection" style="display:none;margin-top:8px;">
+      <button class="btn-secondary" id="resetCodeBtn" style="width:100%;">ðŸ”„ RÃ©initialiser le code</button>
+      <p id="resetCodeStatusMsg" style="font-size:12.5px;color:var(--muted);margin:6px 0 0;"></p>
+    </div>
+
+    <div id="blockSection" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
+      <label style="font-size:13px;font-weight:600;">Bloquer l'accÃ¨s Ã  partir du</label>
+      <input type="date" id="blockFromDate" style="width:100%;margin:6px 0 8px;padding:10px;border-radius:10px;border:1px solid var(--line);color:var(--ink);background:#fff;">
+      <div style="display:flex;gap:8px;">
+        <button class="btn-secondary" id="unblockPatientBtn" style="flex:1;">âœ… DÃ©bloquer</button>
+        <button class="btn-secondary" id="blockPatientBtn" style="flex:1;color:var(--alert);">ðŸš« Bloquer</button>
+      </div>
+      <p id="blockStatusMsg" style="font-size:12.5px;color:var(--muted);margin:8px 0 0;"></p>
+      <p id="attendanceStatusMsg" style="font-size:12.5px;color:var(--muted);margin:4px 0 0;"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ================= CORBEILLE (RDV supprimÃ©s, restauration possible) ================= -->
+<div class="overlay" id="trashOverlay">
+  <div class="modal" style="max-width:480px;max-height:80vh;overflow:auto;">
+    <h3 style="margin-bottom:8px;">Corbeille</h3>
+    <p style="color:var(--muted);font-size:13px;margin:0 0 14px;">Les RDV supprimÃ©s restent ici. Tu peux les restaurer ou les effacer dÃ©finitivement.</p>
+    <div id="trashList" style="display:flex;flex-direction:column;gap:8px;"></div>
+    <button class="btn-secondary" id="trashCloseBtn" style="width:100%;margin-top:16px;">Fermer</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ===== Afficher/masquer le mot de passe medecin =====
+  var pwInput = document.getElementById('adminPassword');
+  var pwToggle = document.getElementById('adminPasswordToggle');
+  if (pwInput && pwToggle) {
+    pwToggle.addEventListener('click', function(){
+      var hidden = pwInput.type === 'password';
+      pwInput.type = hidden ? 'text' : 'password';
+      pwToggle.textContent = hidden ? 'ðŸ™ˆ' : 'ðŸ‘ï¸';
+      pwToggle.title = hidden ? 'Masquer le mot de passe' : 'Afficher le mot de passe';
+    });
+  }
+})();
+// ===== Temoin visuel de fiabilite patient (RDV honores / total) =====
+// Fonctionne par observation du DOM deja rendu par app.js (aucune
+// modification du coeur de l'app), donc reste synchronise avec tout
+// re-rendu (recherche, changement de statut honore, etc.)
+(function(){
+  function honorColor(ratio){
+    // 0 = rouge (--alert), 0.5 = ambre (--amber), 1 = vert/teal (--teal)
+    var stops = [[224,83,61],[255,178,107],[63,169,162]];
+    ratio = Math.max(0, Math.min(1, ratio));
+    var a, b, t;
+    if (ratio <= 0.5) { a = stops[0]; b = stops[1]; t = ratio/0.5; }
+    else { a = stops[1]; b = stops[2]; t = (ratio-0.5)/0.5; }
+    var c = a.map(function(v,i){ return Math.round(v + (b[i]-v)*t); });
+    return 'rgb('+c[0]+','+c[1]+','+c[2]+')';
+  }
+
+  function makeDot(ratio, label){
+    var d = document.createElement('span');
+    d.className = 'honor-dot' + (ratio === null ? ' honor-dot-empty' : '');
+    d.title = label;
+    d.style.background = ratio === null ? 'var(--line)' : honorColor(ratio);
+    return d;
+  }
+
+  // ---------- Cote medecin : liste des RDV ----------
+  function computeAdminStats(){
+    var cards = document.querySelectorAll('#rdvList .rdv-card');
+    var stats = {};
+    cards.forEach(function(card){
+      var meta = card.querySelector('.rdv-info .meta');
+      if (!meta) return;
+      var parts = (meta.textContent || '').split('\u00B7');
+      var phone = parts.length > 1 ? parts[parts.length - 1].trim() : null;
+      if (!phone) return;
+      var isYes = !!card.querySelector('.honor-badge.honor-yes');
+      var isNo = !!card.querySelector('.honor-badge.honor-no');
+      if (!isYes && !isNo) return;
+      if (!stats[phone]) stats[phone] = { yes: 0, total: 0 };
+      stats[phone].total++;
+      if (isYes) stats[phone].yes++;
+    });
+    return stats;
+  }
+
+  function decorateAdminList(){
+    var list = document.getElementById('rdvList');
+    if (!list) return;
+    var stats = computeAdminStats();
+    list.querySelectorAll('.rdv-card').forEach(function(card){
+      var meta = card.querySelector('.rdv-info .meta');
+      var nameEl = card.querySelector('.rdv-info .name');
+      if (!meta || !nameEl) return;
+      var existing = nameEl.querySelector('.honor-dot');
+      if (existing) existing.remove();
+      var parts = (meta.textContent || '').split('\u00B7');
+      var phone = parts.length > 1 ? parts[parts.length - 1].trim() : null;
+      if (!phone) return;
+      var s = stats[phone];
+      var dot;
+      if (!s || s.total === 0) {
+        dot = makeDot(null, 'Historique insuffisant pour ce patient');
+      } else {
+        var ratio = s.yes / s.total, pct = Math.round(ratio * 100);
+        dot = makeDot(ratio, s.yes + '/' + s.total + ' RDV honorÃ©s (' + pct + '%)');
+      }
+      nameEl.appendChild(dot);
+    });
+  }
+
+  var adminDebounce;
+  var adminObserver = new MutationObserver(function(){
+    clearTimeout(adminDebounce);
+    adminDebounce = setTimeout(decorateAdminList, 30);
+  });
+  var listEl = document.getElementById('rdvList');
+  if (listEl) adminObserver.observe(listEl, { childList: true, subtree: true });
+
+  // ---------- Cote patient : fiche personnelle ----------
+  function decoratePatientHero(){
+    var wrap = document.getElementById('otherRdvWrap');
+    var heroWrap = document.getElementById('patientHeroWrap');
+    if (!wrap || !heroWrap) return;
+    var existing = heroWrap.querySelector('.honor-summary');
+    if (existing) existing.remove();
+    var m = (wrap.textContent || '').match(/(\d+)\s*\/\s*(\d+)\s*rendez-vous honor/);
+    if (!m) return;
+    var yes = parseInt(m[1], 10), total = parseInt(m[2], 10);
+    if (!total) return;
+    var ratio = yes / total, pct = Math.round(ratio * 100);
+    var holder = document.createElement('div');
+    holder.className = 'honor-summary';
+    var dot = makeDot(ratio, yes + '/' + total + ' RDV honorÃ©s');
+    var span = document.createElement('span');
+    span.textContent = 'FiabilitÃ© RDV : ' + pct + '%';
+    holder.appendChild(dot);
+    holder.appendChild(span);
+    var heroCard = heroWrap.querySelector('.patient-hero') || heroWrap;
+    heroCard.appendChild(holder);
+  }
+
+  var patientDebounce;
+  var patientObserver = new MutationObserver(function(){
+    clearTimeout(patientDebounce);
+    patientDebounce = setTimeout(decoratePatientHero, 30);
+  });
+  var resultWrap = document.getElementById('patientResultWrap');
+  if (resultWrap) patientObserver.observe(resultWrap, { childList: true, subtree: true, characterData: true });
+})();
+</script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
