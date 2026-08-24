@@ -1,0 +1,12 @@
+{
+  "name": "rdv-cabinet-belhoula-reminders",
+  "description": "Script de rappels de RDV — exécuté par un cron gratuit externe (voir .github/workflows/send-reminders.yml)",
+  "private": true,
+  "scripts": {
+    "send-reminders": "node scripts/send-reminders.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.1.0"
+  }
+}
+

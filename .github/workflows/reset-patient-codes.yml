@@ -1,0 +1,29 @@
+name: Réinitialisation des codes patients
+
+# Tourne toutes les 5 min (le minimum autorisé par GitHub Actions ; le
+# déclenchement réel peut être décalé de quelques minutes en période de
+# forte charge sur GitHub — c'est le compromis du plan gratuit, voir la
+# discussion avec le médecin). "workflow_dispatch" permet aussi de le
+# lancer manuellement depuis l'onglet Actions du dépôt, sans attendre.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  reset-codes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Installer firebase-admin
+        run: npm install firebase-admin
+
+      - name: Traiter les demandes de réinitialisation en attente
+        run: node scripts/reset-patient-codes.js
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
