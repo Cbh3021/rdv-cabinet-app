@@ -877,4 +877,4 @@ re2js/build/index.js:
    * See the License for the specific language governing permissions and
    * limitations under the License.
    *)
-*/Fix: série récurrente + score fidélité
+*/'Fix: série récurrente + score fidélité'
