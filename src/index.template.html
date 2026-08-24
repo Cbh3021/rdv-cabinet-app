@@ -4,15 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="color-scheme" content="light dark">
-<title>Reminder CBH â€” Dr HÃ©di Belhoula</title>
+<title>Reminder CBH — Dr Hédi Belhoula</title>
 <script>
-// Anti-flash de thÃ¨me : pose data-theme AVANT le premier rendu, donc avant
-// que app.js (chargÃ© en <script type="module"> tout en bas de la page) ait
-// eu le temps de s'exÃ©cuter. Sans Ã§a, l'appli peint d'abord le thÃ¨me clair
-// par dÃ©faut puis bascule en sombre une fois app.js chargÃ© â€” flash trÃ¨s
-// visible juste aprÃ¨s un vidage de cache, quand app.js met plus longtemps
-// Ã  se tÃ©lÃ©charger. Doit rester synchrone et rester en tÃªte du <head>.
-// La valeur par dÃ©faut ('light') doit rester identique Ã  celle d'app.js
+// Anti-flash de thème : pose data-theme AVANT le premier rendu, donc avant
+// que app.js (chargé en <script type="module"> tout en bas de la page) ait
+// eu le temps de s'exécuter. Sans ça, l'appli peint d'abord le thème clair
+// par défaut puis bascule en sombre une fois app.js chargé — flash très
+// visible juste après un vidage de cache, quand app.js met plus longtemps
+// à se télécharger. Doit rester synchrone et rester en tête du <head>.
+// La valeur par défaut ('light') doit rester identique à celle d'app.js
 // (let theme = localStorage.getItem('rdvTheme') || 'light';).
 (function(){
   try{
@@ -37,7 +37,7 @@
   }
   *{box-sizing:border-box;}
   /* Empeche le WebView Android de plaquer son propre style natif (parfois
-     fond sombre + texte sombre) par-dessus nos boutons en mode sombre â€”
+     fond sombre + texte sombre) par-dessus nos boutons en mode sombre —
      meme cause que le bug email/mot de passe deja corrige sur les inputs. */
   button{appearance:none;-webkit-appearance:none;font-family:inherit;color:inherit;}
   .honor-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-left:8px;
@@ -87,7 +87,7 @@
   .icon-btn:hover{border-color:var(--coral);}
   .switch-btn{border:none;background:var(--btn2);padding:9px 16px;border-radius:999px;font-size:12.5px;font-weight:700;cursor:pointer;}
 
-  /* ---------- dropdown / overflow menus (â‹®) ---------- */
+  /* ---------- dropdown / overflow menus (⋮) ---------- */
   .dropdown{position:relative;display:inline-flex;}
   .dropdown-menu{position:absolute;top:calc(100% + 8px);right:0;background:#2D3142 !important;border:1px solid rgba(255,255,255,0.12);
     border-radius:14px;box-shadow:0 16px 36px rgba(45,49,66,0.16);min-width:200px;padding:6px;z-index:60;
@@ -220,29 +220,29 @@
 <body>
 
 <div id="configBanner">
-  âš ï¸ Firebase non configurÃ© â€” Ã©dite <code>firebaseConfig</code> en haut du fichier avec les clÃ©s de ton projet Firebase pour activer la synchronisation et l'authentification. L'appli fonctionne pour l'instant en mode local (pas de sync, pas de connexion requise).
+  ⚠️ Firebase non configuré — édite <code>firebaseConfig</code> en haut du fichier avec les clés de ton projet Firebase pour activer la synchronisation et l'authentification. L'appli fonctionne pour l'instant en mode local (pas de sync, pas de connexion requise).
 </div>
 
 <!-- ================= ROLE GATE ================= -->
 <div id="roleGate">
   <button class="lang-btn" id="langBtnGate" title="Changer de langue" style="position:absolute;top:18px;right:18px;">AR</button>
-  <button class="icon-btn" id="themeBtnGate" title="Changer de thÃ¨me" style="position:absolute;top:18px;right:66px;">ðŸŒ™</button>
+  <button class="icon-btn" id="themeBtnGate" title="Changer de thème" style="position:absolute;top:18px;right:66px;">🌙</button>
   <div class="gate-mark"></div>
-  <h1 id="roleGateTitle">RDV MÃ©dical</h1>
-  <div class="role-gate-badge" id="roleGateBadge">Cabinet Dr. HÃ©di Belhoula</div>
+  <h1 id="roleGateTitle">RDV Médical</h1>
+  <div class="role-gate-badge" id="roleGateBadge">Cabinet Dr. Hédi Belhoula</div>
   <div class="role-choices">
     <div class="role-card" id="chooseAdmin">
-      <div class="emoji">ðŸ©º</div>
-      <div class="label" id="roleAdminLabel">MÃ©decin</div>
-      <div class="desc" id="roleAdminDesc">GÃ©rer les rendez-vous</div>
+      <div class="emoji">🩺</div>
+      <div class="label" id="roleAdminLabel">Médecin</div>
+      <div class="desc" id="roleAdminDesc">Gérer les rendez-vous</div>
     </div>
     <div class="role-card" id="chooseAdminPatient">
-      <div class="emoji">ðŸ“±</div>
+      <div class="emoji">📱</div>
       <div class="label" id="rolePatientLabel">Patient</div>
       <div class="desc" id="rolePatientDesc">Consulter mes RDV</div>
     </div>
   </div>
-  <div class="sync-note"><span class="sync-dot off" id="syncDot"></span><span id="syncLabel">Connexionâ€¦</span></div>
+  <div class="sync-note"><span class="sync-dot off" id="syncDot"></span><span id="syncLabel">Connexion…</span></div>
 </div>
 
 <!-- ================= APP SHELL ================= -->
@@ -255,13 +255,13 @@
       </div>
     </div>
     <div class="header-actions">
-      <button class="icon-btn" id="themeToggleBtn" title="Changer de thÃ¨me">ðŸŒ™</button>
-      <button class="icon-btn" id="muteBtn" title="Couper le son">ðŸ”Š</button>
+      <button class="icon-btn" id="themeToggleBtn" title="Changer de thème">🌙</button>
+      <button class="icon-btn" id="muteBtn" title="Couper le son">🔊</button>
       <div class="dropdown">
-        <button class="icon-btn" id="headerMenuBtn" data-menu-toggle title="Plus d'options">â‹®</button>
+        <button class="icon-btn" id="headerMenuBtn" data-menu-toggle title="Plus d'options">⋮</button>
         <div class="dropdown-menu" id="headerMenu">
           <button class="dropdown-item" id="switchRoleBtn">Changer de vue</button>
-          <button class="dropdown-item" id="signOutBtn" style="display:none;">Se dÃ©connecter</button>
+          <button class="dropdown-item" id="signOutBtn" style="display:none;">Se déconnecter</button>
         </div>
       </div>
     </div>
@@ -273,8 +273,8 @@
 
       <!-- login gate -->
       <div class="phone-gate" id="adminLoginWrap" style="display:none;">
-        <div class="display" id="adminLoginTitle">Connexion mÃ©decin</div>
-        <p id="adminLoginSub">Connecte-toi avec ton compte pour gÃ©rer les rendez-vous.</p>
+        <div class="display" id="adminLoginTitle">Connexion médecin</div>
+        <p id="adminLoginSub">Connecte-toi avec ton compte pour gérer les rendez-vous.</p>
         <div class="field">
           <label id="emailLabel">Email</label>
           <input type="email" id="adminEmail" placeholder="email@exemple.com">
@@ -282,8 +282,8 @@
         <div class="field">
           <label id="passwordLabel">Mot de passe</label>
           <div class="field-pw-wrap">
-            <input type="password" id="adminPassword" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢">
-            <button type="button" class="field-pw-toggle" id="adminPasswordToggle" title="Afficher/masquer le mot de passe" aria-label="Afficher/masquer le mot de passe">ðŸ‘ï¸</button>
+            <input type="password" id="adminPassword" placeholder="••••••••">
+            <button type="button" class="field-pw-toggle" id="adminPasswordToggle" title="Afficher/masquer le mot de passe" aria-label="Afficher/masquer le mot de passe">👁️</button>
           </div>
         </div>
         <button class="btn-primary" id="adminLoginBtn">Se connecter</button>
@@ -299,14 +299,14 @@
           <button class="btn-primary" id="addBtn">+ Fixer un RDV</button>
         </div>
         <div class="toolbar-row2">
-          <input type="text" id="adminSearchInput" placeholder="ðŸ”Ž Chercher un nom ou numÃ©roâ€¦">
+          <input type="text" id="adminSearchInput" placeholder="🔎 Chercher un nom ou numéro…">
           <div class="dropdown">
-            <button class="icon-btn" id="toolbarMenuBtn" data-menu-toggle title="Plus d'actions">â‹®</button>
+            <button class="icon-btn" id="toolbarMenuBtn" data-menu-toggle title="Plus d'actions">⋮</button>
             <div class="dropdown-menu" id="toolbarMenu">
-              <button class="dropdown-item" id="exportCsvBtn">â¬‡ï¸ Exporter en CSV</button>
-              <button class="dropdown-item" id="trashBtn">ðŸ—‘ï¸ Corbeille</button>
+              <button class="dropdown-item" id="exportCsvBtn">⬇️ Exporter en CSV</button>
+              <button class="dropdown-item" id="trashBtn">🗑️ Corbeille</button>
               <div class="dropdown-divider"></div>
-              <button class="dropdown-item" id="findCodeBtn">ðŸ”‘ Code patient</button>
+              <button class="dropdown-item" id="findCodeBtn">🔑 Code patient</button>
             </div>
           </div>
         </div>
@@ -317,15 +317,15 @@
     <!-- ---------- PATIENT VIEW ---------- -->
     <section id="patientView" style="display:none;">
 
-      <!-- phone + code entry (compte crÃ©Ã© par le mÃ©decin, pas d'auto-inscription) -->
+      <!-- phone + code entry (compte créé par le médecin, pas d'auto-inscription) -->
       <div class="phone-gate" id="phoneGate">
         <div class="display" id="patientIntroTitle">Mes rendez-vous</div>
-        <p id="patientIntroSub">Entre ton numÃ©ro et le code personnel remis par le cabinet pour accÃ©der Ã  tes rendez-vous.</p>
-        <p id="respectDateNote" style="color:var(--alert);font-size:12px;font-weight:600;margin:-14px 0 18px;">PriÃ¨re de respecter la date du RDV indiquÃ©.</p>
+        <p id="patientIntroSub">Entre ton numéro et le code personnel remis par le cabinet pour accéder à tes rendez-vous.</p>
+        <p id="respectDateNote" style="color:var(--alert);font-size:12px;font-weight:600;margin:-14px 0 18px;">Prière de respecter la date du RDV indiqué.</p>
         <input type="tel" id="phoneInput" placeholder="Ex: 22 123 456">
         <label id="codeFieldLabel" style="display:block;font-size:12.5px;font-weight:700;margin:12px 0 6px;">Code personnel</label>
         <input type="text" id="codeInput" inputmode="numeric" placeholder="123456">
-        <button class="btn-primary" id="patientLoginBtn" style="margin-top:14px;width:100%;">AccÃ©der Ã  mes rendez-vous</button>
+        <button class="btn-primary" id="patientLoginBtn" style="margin-top:14px;width:100%;">Accéder à mes rendez-vous</button>
         <p class="error-text" id="phoneError" style="display:none;"></p>
       </div>
 
@@ -340,10 +340,10 @@
   </main>
 
   <footer id="footerText">
-    <div id="footerCopyright">Dr HÃ©di Belhoula Â© 2026</div>
+    <div id="footerCopyright">Dr Hédi Belhoula © 2026</div>
     <div id="footerSub">outil interne de gestion des rendez-vous</div>
-    <div id="footerAddress" style="margin-top:8px;">Route de Tunis km9, CitÃ© El Ons</div>
-    <div><span id="footerPhoneLabel">NÂ° TÃ©l</span> : 98 419669</div>
+    <div id="footerAddress" style="margin-top:8px;">Route de Tunis km9, Cité El Ons</div>
+    <div><span id="footerPhoneLabel">N° Tél</span> : 98 419669</div>
   </footer>
 </div>
 
@@ -353,13 +353,13 @@
     <h3 id="modalTitle">Fixer un rendez-vous</h3>
     <div class="field">
       <label id="nameLabel">Nom du patient</label>
-      <input type="text" id="fName" placeholder="Nom et prÃ©nom" list="nameSuggestions" autocomplete="off">
+      <input type="text" id="fName" placeholder="Nom et prénom" list="nameSuggestions" autocomplete="off">
       <datalist id="nameSuggestions"></datalist>
     </div>
     <div class="field">
-      <label id="phoneFieldLabel">NumÃ©ro de tÃ©lÃ©phone</label>
+      <label id="phoneFieldLabel">Numéro de téléphone</label>
       <input type="tel" id="fPhone" placeholder="Ex: 22 123 456">
-      <div class="field-hint" id="phoneFieldHint">Format tunisien Ã  8 chiffres â€” sera enregistrÃ© comme +216XXXXXXXX</div>
+      <div class="field-hint" id="phoneFieldHint">Format tunisien à 8 chiffres — sera enregistré comme +216XXXXXXXX</div>
     </div>
     <div class="field-row">
       <div class="field">
@@ -380,16 +380,16 @@
       <textarea id="fNotes" rows="2" placeholder="Notes internes"></textarea>
     </div>
     <div class="field" id="recurrenceWrap">
-      <label>RÃ©pÃ©ter automatiquement (suivi chronique / APCI)</label>
+      <label>Répéter automatiquement (suivi chronique / APCI)</label>
       <select id="fRecurrenceInterval">
-        <option value="none">Aucune rÃ©pÃ©tition</option>
+        <option value="none">Aucune répétition</option>
         <option value="4w">Toutes les 4 semaines</option>
         <option value="monthly">Tous les mois</option>
         <option value="2m">Tous les 2 mois</option>
         <option value="3m">Tous les 3 mois</option>
         <option value="6m">Tous les 6 mois</option>
       </select>
-      <p style="font-size:12px;color:var(--muted);margin:6px 0 0;">DÃ¨s que ce RDV sera marquÃ© "âœ… HonorÃ©", le suivant sera crÃ©Ã© automatiquement Ã  cet intervalle. Marque "Aucune rÃ©pÃ©tition" pour arrÃªter la chaÃ®ne.</p>
+      <p style="font-size:12px;color:var(--muted);margin:6px 0 0;">Dès que ce RDV sera marqué "✅ Honoré", le suivant sera créé automatiquement à cet intervalle. Marque "Aucune répétition" pour arrêter la chaîne.</p>
     </div>
     <div class="modal-actions">
       <button class="btn-secondary" id="cancelBtn">Annuler</button>
@@ -398,7 +398,7 @@
   </div>
 </div>
 
-<!-- ================= REMINDER POPUP (1er / 2eme rappel â€” patient) ================= -->
+<!-- ================= REMINDER POPUP (1er / 2eme rappel — patient) ================= -->
 <div class="overlay" id="reminderOverlay">
   <div class="modal" style="max-width:360px;text-align:center;">
     <div id="reminderBadge" style="width:52px;height:52px;border-radius:50%;margin:0 auto 14px;
@@ -411,15 +411,15 @@
   </div>
 </div>
 
-<!-- ================= CODE PATIENT GÃ‰NÃ‰RÃ‰ (popup admin, Ã  remettre au patient) ================= -->
+<!-- ================= CODE PATIENT GÉNÉRÉ (popup admin, à remettre au patient) ================= -->
 <div class="overlay" id="patientCodeOverlay">
   <div class="modal" style="max-width:360px;text-align:center;">
-    <div class="display" id="patientCodeTitle" style="margin-bottom:8px;">Code patient gÃ©nÃ©rÃ©</div>
-    <p id="patientCodeSub" style="color:var(--muted);font-size:13px;margin:0 0 14px;">Note ce code et donne-le au patient â€” il lui sera demandÃ© Ã  chaque connexion.</p>
+    <div class="display" id="patientCodeTitle" style="margin-bottom:8px;">Code patient généré</div>
+    <p id="patientCodeSub" style="color:var(--muted);font-size:13px;margin:0 0 14px;">Note ce code et donne-le au patient — il lui sera demandé à chaque connexion.</p>
     <div style="font-family:'Fraunces';font-weight:700;font-size:40px;letter-spacing:.08em;
       background:var(--cream);border:1px solid var(--line);border-radius:16px;padding:18px;
       text-align:center;" id="patientCodeValue">------</div>
-    <button class="btn-primary" id="patientCodeOkBtn" style="margin-top:16px;width:100%;">OK, notÃ©</button>
+    <button class="btn-primary" id="patientCodeOkBtn" style="margin-top:16px;width:100%;">OK, noté</button>
   </div>
 </div>
 
@@ -427,27 +427,27 @@
 <div class="overlay" id="findCodeOverlay">
   <div class="modal" style="max-width:360px;">
     <h3 style="margin-bottom:8px;">Retrouver un code patient</h3>
-    <p style="color:var(--muted);font-size:13px;margin:0 0 14px;">Entre le numÃ©ro de tÃ©lÃ©phone du patient pour retrouver son code de connexion.</p>
-    <label style="font-size:13px;font-weight:600;">TÃ©lÃ©phone</label>
+    <p style="color:var(--muted);font-size:13px;margin:0 0 14px;">Entre le numéro de téléphone du patient pour retrouver son code de connexion.</p>
+    <label style="font-size:13px;font-weight:600;">Téléphone</label>
     <input type="tel" id="findCodePhone" placeholder="12 345 678" style="width:100%;margin:6px 0 6px;padding:10px;border-radius:10px;border:1px solid var(--line);color:var(--ink);background:#fff;">
     <p class="error-text" id="findCodeError" style="display:none;color:var(--alert);font-size:13px;margin:4px 0 0;"></p>
     <div style="display:flex;gap:8px;margin-top:16px;">
       <button class="btn-secondary" id="findCodeCancelBtn">Annuler</button>
       <button class="btn-primary wide" id="findCodeSubmitBtn">Chercher</button>
     </div>
-    <button class="btn-secondary" id="deletePatientBtn" style="width:100%;margin-top:8px;color:var(--alert);display:none;">ðŸ—‘ Supprimer ce patient</button>
+    <button class="btn-secondary" id="deletePatientBtn" style="width:100%;margin-top:8px;color:var(--alert);display:none;">🗑 Supprimer ce patient</button>
 
     <div id="resetCodeSection" style="display:none;margin-top:8px;">
-      <button class="btn-secondary" id="resetCodeBtn" style="width:100%;">ðŸ”„ RÃ©initialiser le code</button>
+      <button class="btn-secondary" id="resetCodeBtn" style="width:100%;">🔄 Réinitialiser le code</button>
       <p id="resetCodeStatusMsg" style="font-size:12.5px;color:var(--muted);margin:6px 0 0;"></p>
     </div>
 
     <div id="blockSection" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
-      <label style="font-size:13px;font-weight:600;">Bloquer l'accÃ¨s Ã  partir du</label>
+      <label style="font-size:13px;font-weight:600;">Bloquer l'accès à partir du</label>
       <input type="date" id="blockFromDate" style="width:100%;margin:6px 0 8px;padding:10px;border-radius:10px;border:1px solid var(--line);color:var(--ink);background:#fff;">
       <div style="display:flex;gap:8px;">
-        <button class="btn-secondary" id="unblockPatientBtn" style="flex:1;">âœ… DÃ©bloquer</button>
-        <button class="btn-secondary" id="blockPatientBtn" style="flex:1;color:var(--alert);">ðŸš« Bloquer</button>
+        <button class="btn-secondary" id="unblockPatientBtn" style="flex:1;">✅ Débloquer</button>
+        <button class="btn-secondary" id="blockPatientBtn" style="flex:1;color:var(--alert);">🚫 Bloquer</button>
       </div>
       <p id="blockStatusMsg" style="font-size:12.5px;color:var(--muted);margin:8px 0 0;"></p>
       <p id="attendanceStatusMsg" style="font-size:12.5px;color:var(--muted);margin:4px 0 0;"></p>
@@ -455,11 +455,11 @@
   </div>
 </div>
 
-<!-- ================= CORBEILLE (RDV supprimÃ©s, restauration possible) ================= -->
+<!-- ================= CORBEILLE (RDV supprimés, restauration possible) ================= -->
 <div class="overlay" id="trashOverlay">
   <div class="modal" style="max-width:480px;max-height:80vh;overflow:auto;">
     <h3 style="margin-bottom:8px;">Corbeille</h3>
-    <p style="color:var(--muted);font-size:13px;margin:0 0 14px;">Les RDV supprimÃ©s restent ici. Tu peux les restaurer ou les effacer dÃ©finitivement.</p>
+    <p style="color:var(--muted);font-size:13px;margin:0 0 14px;">Les RDV supprimés restent ici. Tu peux les restaurer ou les effacer définitivement.</p>
     <div id="trashList" style="display:flex;flex-direction:column;gap:8px;"></div>
     <button class="btn-secondary" id="trashCloseBtn" style="width:100%;margin-top:16px;">Fermer</button>
   </div>
@@ -474,7 +474,7 @@
     pwToggle.addEventListener('click', function(){
       var hidden = pwInput.type === 'password';
       pwInput.type = hidden ? 'text' : 'password';
-      pwToggle.textContent = hidden ? 'ðŸ™ˆ' : 'ðŸ‘ï¸';
+      pwToggle.textContent = hidden ? '🙈' : '👁️';
       pwToggle.title = hidden ? 'Masquer le mot de passe' : 'Afficher le mot de passe';
     });
   }
@@ -542,7 +542,7 @@
         dot = makeDot(null, 'Historique insuffisant pour ce patient');
       } else {
         var ratio = s.yes / s.total, pct = Math.round(ratio * 100);
-        dot = makeDot(ratio, s.yes + '/' + s.total + ' RDV honorÃ©s (' + pct + '%)');
+        dot = makeDot(ratio, s.yes + '/' + s.total + ' RDV honorés (' + pct + '%)');
       }
       nameEl.appendChild(dot);
     });
@@ -570,9 +570,9 @@
     var ratio = yes / total, pct = Math.round(ratio * 100);
     var holder = document.createElement('div');
     holder.className = 'honor-summary';
-    var dot = makeDot(ratio, yes + '/' + total + ' RDV honorÃ©s');
+    var dot = makeDot(ratio, yes + '/' + total + ' RDV honorés');
     var span = document.createElement('span');
-    span.textContent = 'FiabilitÃ© RDV : ' + pct + '%';
+    span.textContent = 'Fiabilité RDV : ' + pct + '%';
     holder.appendChild(dot);
     holder.appendChild(span);
     var heroCard = heroWrap.querySelector('.patient-hero') || heroWrap;
