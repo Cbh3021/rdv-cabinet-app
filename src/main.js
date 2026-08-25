@@ -56,7 +56,7 @@ import { initializeApp, deleteApp } from "firebase/app";
 import {
   initializeFirestore, persistentLocalCache, persistentSingleTabManager,
   collection, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc,
-  onSnapshot, query, where, orderBy, limit, startAfter, getDocs, serverTimestamp
+  onSnapshot, query, where, orderBy, limit, startAfter, getDocs, serverTimestamp, increment
 } from "firebase/firestore";
 import {
   getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
@@ -852,6 +852,79 @@ function rdvCardHtml(a){
       ${honoredBanner}
     </div>`;
 }
+// Carte dédiée à l'historique : contrairement à rdvCardHtml() (RDV actifs),
+// pas de "Modifier" ni de demandes patient (n'a plus de sens sur un RDV déjà
+// passé et archivé) — seulement la suppression définitive.
+function historyCardHtml(a){
+  let honorTag = '';
+  if(a.honored === true) honorTag = `<span class="honor-tag honor-yes">✅ Honoré</span>`;
+  else if(a.honored === false) honorTag = `<span class="honor-tag honor-no">❌ Non présenté</span>`;
+  return `<div class="rdv-card">
+      <div class="rdv-row">
+        <div class="rdv-time">${a.time}</div>
+        <div class="rdv-info">
+          <div class="name">${escapeHtml(a.name)}</div>
+          <div class="meta">${escapeHtml(a.reason)} · ${escapeHtml(a.phone)}</div>
+          ${honorTag}
+        </div>
+        <button data-history-edit="${a.id}" title="Modifier"
+          style="border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:6px 10px;cursor:pointer;">✎</button>
+        <button data-history-delete="${a.id}" title="Supprimer définitivement"
+          style="border:1px solid var(--line);background:transparent;color:var(--alert);border-radius:8px;padding:6px 10px;cursor:pointer;">🗑️</button>
+      </div>
+    </div>`;
+}
+
+// Correction ponctuelle d'un RDV archivé (typo dans le nom, le motif ou les
+// notes). Volontairement minimaliste (pas la modale complète utilisée pour
+// les RDV actifs) : sur un RDV déjà archivé, on ne change ni la date/heure
+// ni le patient concerné — seulement les champs texte, en cas d'erreur de
+// saisie constatée après coup.
+async function editHistoryAppointment(id){
+  const item = historyItems.find(x=>x.id===id);
+  if(!item) return;
+  const name = prompt("Nom du patient :", item.name);
+  if(name===null) return;
+  const reason = prompt("Motif :", item.reason);
+  if(reason===null) return;
+  const notes = prompt("Notes :", item.notes || '');
+  if(notes===null) return;
+  try{
+    await updateDoc(doc(db,"appointments_history", id), {
+      name: name.trim(), reason: reason.trim(), notes: notes.trim()
+    });
+    Object.assign(item, {name: name.trim(), reason: reason.trim(), notes: notes.trim()});
+    renderHistoryList();
+    showToast('RDV archivé modifié.');
+  }catch(e){
+    console.error("Erreur modification RDV archivé", e);
+    alert("Impossible de modifier ce RDV. Réessaie.");
+  }
+}
+
+// Suppression définitive d'un RDV archivé (pas de corbeille pour l'archive :
+// il a déjà été conservé 90+ jours avant d'arriver ici). Corrige aussi les
+// compteurs patients/{phone} pour que le taux de présence reste exact.
+async function permanentlyDeleteHistoryAppointment(id){
+  const item = historyItems.find(x=>x.id===id);
+  if(!confirm('Supprimer définitivement ce RDV archivé ? Cette action est irréversible.')) return;
+  try{
+    await deleteDoc(doc(db,"appointments_history", id));
+    if(item && item.phone){
+      const updates = { totalCount: increment(-1) };
+      if(item.honored === true) updates.honoredCount = increment(-1);
+      else if(item.honored === false) updates.absentCount = increment(-1);
+      await setDoc(doc(db,"patients", item.phone), updates, { merge:true }).catch(e=>console.error("Correction stats patient échouée", e));
+    }
+    historyItems = historyItems.filter(x=>x.id!==id);
+    renderHistoryList();
+    showToast('RDV archivé supprimé.');
+  }catch(e){
+    console.error("Erreur suppression RDV archivé", e);
+    alert("Impossible de supprimer ce RDV. Réessaie.");
+  }
+}
+
 let adminSearchTerm = '';
 
 /* ---------------- ADMIN: historique paginé (appointments_history) ----------------
@@ -930,6 +1003,12 @@ function ensureHistorySection(){
     if(show && historyItems.length===0) loadHistoryPage(true);
   });
   document.getElementById('historyLoadMoreBtn').addEventListener('click', ()=> loadHistoryPage(false));
+  document.getElementById('historyList').addEventListener('click', (e)=>{
+    const delBtn = e.target.closest('button[data-history-delete]');
+    if(delBtn) permanentlyDeleteHistoryAppointment(delBtn.dataset.historyDelete);
+    const editBtn = e.target.closest('button[data-history-edit]');
+    if(editBtn) editHistoryAppointment(editBtn.dataset.historyEdit);
+  });
 }
 
 function renderHistoryList(){
@@ -944,7 +1023,7 @@ function renderHistoryList(){
     let html='', lastDate=null;
     historyItems.forEach(a=>{
       if(a.date!==lastDate){ html += `<div class="day-heading">${fmtDate(a.date)}</div>`; lastDate=a.date; }
-      html += rdvCardHtml(a);
+      html += historyCardHtml(a);
     });
     list.innerHTML = html;
   }
