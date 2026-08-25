@@ -1,0 +1,31 @@
+name: Archive old appointments
+
+on:
+  schedule:
+    # Tous les jours à 03:00 heure de Tunisie (UTC+1 toute l'année, pas de DST)
+    # → 02:00 UTC. Décalé de send-reminders.yml (06:00 UTC) pour ne pas
+    # tourner en même temps.
+    - cron: '0 2 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  archive-old-appointments:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Installer les dépendances
+        working-directory: scripts
+        run: npm install
+
+      - name: Archiver les RDV anciens
+        working-directory: scripts
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node archive-old-appointments.js

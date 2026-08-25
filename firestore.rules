@@ -22,15 +22,35 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
+    // Le patient est authentifié par email/mot de passe avec un email
+    // synthétique "p<téléphone_e164>@rdvcabinet.local" (voir patientEmailFor
+    // dans app.js) — le code à 6 chiffres remis en main propre sert de mot
+    // de passe. C'est ce qui remplace l'ancienne auth par SMS.
     function isOwner(phone) {
       return request.auth != null &&
-        request.auth.token.phone_number != null &&
-        request.auth.token.phone_number == phone;
+        request.auth.token.email == "p" + phone + "@rdvcabinet.local";
+    }
+
+    // Blocage programmé : le médecin fixe une date (passée = immédiat,
+    // future = programmé) dans contacts/{phone}.blockedFrom. Dès que
+    // l'heure serveur (request.time) atteint cette date, l'accès est
+    // refusé automatiquement — pas besoin d'app ni de tâche planifiée,
+    // Firestore réévalue cette condition à chaque requête.
+    function isBlocked(phone) {
+      // IMPORTANT : get(...).data plante l'évaluation de la règle si le
+      // document n'existe pas (et refuse l'accès par défaut) — donc on
+      // vérifie toujours exists() en premier. Sans ce garde-fou, un patient
+      // dont la fiche contacts a été supprimée (ou jamais créée) se
+      // retrouvait bloqué en lecture sans avoir jamais été réellement
+      // bloqué — bug corrigé ici.
+      return exists(/databases/$(database)/documents/contacts/$(phone)) &&
+        get(/databases/$(database)/documents/contacts/$(phone)).data.get('blockedFrom', null) != null &&
+        get(/databases/$(database)/documents/contacts/$(phone)).data.blockedFrom <= request.time;
     }
 
     function isValidAppointment() {
       return request.resource.data.keys().hasOnly(
-               ['name','phone','date','time','reason','notes']
+               ['name','phone','date','time','reason','notes','deleted','deletedAt','patientRequest','seriesId','honored','recurrenceInterval','remindersSent']
              )
              && request.resource.data.name is string
              && request.resource.data.name.size() > 0
@@ -45,11 +65,38 @@ service cloud.firestore {
     }
 
     match /appointments/{apptId} {
-      // le médecin voit tout ; un patient ne voit que ses propres RDV
-      allow read: if isAdmin() || isOwner(resource.data.phone);
-      // seul le médecin crée/modifie/supprime, et seulement des données valides
-      allow create, update: if isAdmin() && isValidAppointment();
+      // le médecin voit tout (y compris la corbeille) ; un patient ne voit
+      // que ses propres RDV NON supprimés. IMPORTANT : resource.data.deleted
+      // plante si le champ n'existe pas (cas de tout RDV jamais passé par la
+      // Corbeille) — .get(...,false) évite ce piège classique des règles
+      // Firestore, qui refusait silencieusement l'accès à ces patients.
+      allow read: if isAdmin() || (isOwner(resource.data.phone) && resource.data.get('deleted', false) != true && !isBlocked(resource.data.phone));
+      // seul le médecin crée un RDV, avec des données valides
+      allow create: if isAdmin() && isValidAppointment();
+      // le médecin modifie/valide tout ; un patient peut UNIQUEMENT poser
+      // ou retirer une demande (annulation / décalage) sur son propre RDV
+      // non supprimé et non bloqué — jamais changer date/heure lui-même
+      allow update: if (isAdmin() && isValidAppointment()) ||
+        (isOwner(resource.data.phone) && resource.data.get('deleted', false) != true && !isBlocked(resource.data.phone) &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['patientRequest']));
       allow delete: if isAdmin();
+    }
+
+    // Archive : RDV de plus de 90 jours, déplacés ici chaque nuit par
+    // scripts/archive-old-appointments.js via le SDK Admin (qui contourne
+    // ces règles — donc "write: false" ci-dessous ne bloque jamais le
+    // script, seulement les tentatives d'écriture depuis l'app cliente).
+    // Lecture : mêmes conditions que pour les RDV actifs.
+    match /appointments_history/{apptId} {
+      allow read: if isAdmin() || (isOwner(resource.data.phone) && resource.data.get('deleted', false) != true && !isBlocked(resource.data.phone));
+      allow write: if false;
+    }
+
+    // Compteurs agrégés par patient (honoredCount/absentCount/totalCount),
+    // maintenus uniquement par le script d'archivage — jamais depuis l'app.
+    match /patients/{phone} {
+      allow read: if isAdmin() || isOwner(phone);
+      allow write: if false;
     }
 
     // liste des comptes médecin autorisés — un document par uid admin,
@@ -57,6 +104,19 @@ service cloud.firestore {
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
+    }
+
+    // Carnet de contacts (nom, statut de compte, code généré, token push).
+    // Lecture/écriture réservées au médecin ; un patient authentifié peut
+    // seulement mettre à jour son propre fcmToken/lang (pour activer les
+    // notifications), jamais lire ou modifier d'autres champs — en
+    // particulier jamais lastCode, qui reste réservé au médecin (c'est le
+    // code de connexion des AUTRES patients qu'il ne doit jamais voir).
+    match /contacts/{phone} {
+      allow read: if isAdmin() || isOwner(phone);
+      allow write: if isAdmin() ||
+        (isOwner(phone) &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmToken','lang']));
     }
   }
 }
