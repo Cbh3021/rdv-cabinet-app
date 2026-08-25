@@ -871,14 +871,21 @@ async function loadHistoryPage(reset){
   historyLoading = true;
   renderHistoryList(); // affiche l'état "chargement…"
   try{
-    const clauses = [orderBy('date','desc'), orderBy('time','desc'), limit(HISTORY_PAGE_SIZE)];
+    // Un seul orderBy (date) : indexé automatiquement par Firestore, aucun
+    // index composé à créer. On passe le docSnapshot complet à startAfter
+    // (pas juste la valeur du champ), ce qui permet une pagination fiable
+    // même avec plusieurs RDV à la même date.
+    const clauses = [orderBy('date','desc'), limit(HISTORY_PAGE_SIZE)];
     const q = historyLastDoc
-      ? query(apptsHistoryCol, orderBy('date','desc'), orderBy('time','desc'), startAfter(historyLastDoc), limit(HISTORY_PAGE_SIZE))
+      ? query(apptsHistoryCol, orderBy('date','desc'), startAfter(historyLastDoc), limit(HISTORY_PAGE_SIZE))
       : query(apptsHistoryCol, ...clauses);
     const snap = await getDocs(q);
     historyLastDoc = snap.docs[snap.docs.length-1] || historyLastDoc;
     historyHasMore = snap.docs.length === HISTORY_PAGE_SIZE;
     historyItems = historyItems.concat(snap.docs.map(d=>({id:d.id, ...d.data()})));
+    // La requête ne trie que par date ; on affine par heure décroissante à
+    // l'intérieur d'une même date (pas besoin d'index composé pour ça).
+    historyItems.sort((a,b)=> (b.date+b.time).localeCompare(a.date+a.time));
   }catch(e){
     console.error("Erreur chargement historique", e);
   }
@@ -906,12 +913,12 @@ function ensureHistorySection(){
   section.id = 'historySection';
   section.style.marginTop = '40px';
   section.innerHTML = `
-    <button id="historyToggleBtn" type="button" style="width:100%;padding:12px;border-radius:12px;border:1px solid #ddd;background:#fff;font-weight:600;cursor:pointer;">
+    <button id="historyToggleBtn" type="button" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--ink);font-weight:600;cursor:pointer;">
       📜 Voir tout l'historique archivé
     </button>
     <div id="historyPanel" style="display:none;margin-top:16px;">
       <div id="historyList"></div>
-      <button id="historyLoadMoreBtn" type="button" style="width:100%;margin-top:12px;padding:10px;border-radius:12px;border:1px solid #ddd;background:#fff;cursor:pointer;">
+      <button id="historyLoadMoreBtn" type="button" style="width:100%;margin-top:12px;padding:10px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer;">
         Charger plus
       </button>
     </div>`;
