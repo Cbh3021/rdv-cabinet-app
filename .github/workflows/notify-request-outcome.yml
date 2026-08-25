@@ -1,0 +1,30 @@
+name: Notify request outcome
+
+on:
+  schedule:
+    # Toutes les 10 minutes — les patients n'attendent pas jusqu'au lendemain
+    # pour savoir si leur demande a été traitée.
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  notify-request-outcome:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Installer les dépendances
+        working-directory: scripts
+        run: npm install
+
+      - name: Envoyer les notifications
+        working-directory: scripts
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node notify-request-outcome.js

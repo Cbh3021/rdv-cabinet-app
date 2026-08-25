@@ -796,6 +796,20 @@ async function permanentlyDeleteAppointment(id){
 }
 
 /* ---------------- ADMIN: render list ---------------- */
+// Enregistre la décision (acceptée/refusée) sur la fiche contact du patient
+// — jamais sur le RDV lui-même, qui peut être supprimé ou déplacé entre
+// temps. Le patient a déjà le droit de lire son propre contacts/{phone}
+// (règles inchangées), donc aucune republication de firestore.rules requise.
+// pushed:false permet au script scripts/notify-request-outcome.js d'envoyer
+// une notification push même si le patient n'a pas l'appli ouverte.
+async function notifyRequestOutcome(phone, outcome){
+  if(!isConfigured || !phone) return;
+  try{
+    await setDoc(doc(db,"contacts", phone), {
+      lastRequestOutcome: { ...outcome, decidedAt: new Date().toISOString(), pushed:false }
+    }, { merge:true });
+  }catch(e){ console.error("Erreur notification patient", e); }
+}
 async function setHonoredStatus(id, value){
   if(isConfigured) await updateDoc(doc(db,"appointments",id), {honored:value});
   else { const a = appointments.find(x=>x.id===id); if(a){ a.honored=value; renderAdmin(); } }
@@ -1147,15 +1161,18 @@ document.getElementById('rdvList').addEventListener('click', async (e)=>{
   if(reqBtn){
     const a = appointments.find(x=>x.id===reqBtn.dataset.id);
     if(!a) return;
+    const req = a.patientRequest;
     if(reqBtn.dataset.reqAction==='accept-cancel'){
       await removeAppointment(a.id); // passe en Corbeille, récupérable
+      await notifyRequestOutcome(a.phone, {type:'cancel', status:'accepted', requestedDate:a.date, requestedTime:a.time});
     } else if(reqBtn.dataset.reqAction==='accept-reschedule'){
-      const req = a.patientRequest;
       const conflict = appointments.find(x=>!x.deleted && x.date===req.requestedDate && x.time===req.requestedTime && x.id!==a.id);
       if(conflict && !confirm("⚠️ Ce créneau est déjà pris par "+conflict.name+". Accepter quand même ?")) return;
       await editAppointment(a.id, {name:a.name, phone:a.phone, date:req.requestedDate, time:req.requestedTime, reason:a.reason, notes:a.notes||'', recurrenceInterval:a.recurrenceInterval||'none', patientRequest:{}});
+      await notifyRequestOutcome(a.phone, {type:'reschedule', status:'accepted', requestedDate:req.requestedDate, requestedTime:req.requestedTime});
     } else if(reqBtn.dataset.reqAction==='refuse'){
       await updateDoc(doc(db,"appointments",a.id), {patientRequest:{}});
+      await notifyRequestOutcome(a.phone, {type:req?.type||'cancel', status:'refused', requestedDate:req?.requestedDate||a.date, requestedTime:req?.requestedTime||a.time});
     }
     return;
   }
@@ -1690,6 +1707,40 @@ async function subscribePatient(){
       <br><span style="font-size:11px;opacity:.6;">Numéro recherché : ${escapeHtml(patientPhoneE164 || 'aucun')}</span></div></div>`;
     document.getElementById('otherRdvWrap').innerHTML = '';
   });
+
+  // Écoute la fiche contact du patient pour afficher, en temps réel, la
+  // décision du médecin sur une demande d'annulation/décalage — jamais
+  // affichée deux fois grâce à un horodatage mémorisé en local.
+  onSnapshot(doc(db,"contacts", patientPhoneE164), snap=>{
+    const outcome = snap.exists() ? snap.data().lastRequestOutcome : null;
+    showRequestOutcomeBanner(outcome);
+  });
+}
+
+function showRequestOutcomeBanner(outcome){
+  const el = document.getElementById('requestOutcomeBanner');
+  if(!outcome || !outcome.decidedAt){ if(el) el.remove(); return; }
+  const seenKey = 'rdvOutcomeSeen_' + patientPhoneE164;
+  if(localStorage.getItem(seenKey) === outcome.decidedAt){ if(el) el.remove(); return; }
+  const accepted = outcome.status === 'accepted';
+  const verb = outcome.type === 'cancel' ? "d'annulation" : "de décalage";
+  const msg = accepted
+    ? `✅ Votre demande ${verb} a été <b>acceptée</b> par le cabinet.`
+    : `❌ Votre demande ${verb} a été <b>refusée</b> — votre RDV du ${fmtDateShort(outcome.requestedDate)} reste inchangé. Contactez le cabinet si besoin.`;
+  const wrap = document.getElementById('patientHeroWrap');
+  if(!wrap || !wrap.parentNode) return;
+  let banner = document.getElementById('requestOutcomeBanner');
+  if(!banner){
+    banner = document.createElement('div');
+    banner.id = 'requestOutcomeBanner';
+    banner.style.cssText = 'margin:0 0 14px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--ink);font-size:13.5px;';
+    wrap.parentNode.insertBefore(banner, wrap);
+  }
+  banner.innerHTML = `${msg} <button id="dismissOutcomeBtn" class="mini-link" style="margin-left:6px;">OK</button>`;
+  document.getElementById('dismissOutcomeBtn').addEventListener('click', ()=>{
+    localStorage.setItem(seenKey, outcome.decidedAt);
+    banner.remove();
+  });
 }
 
 async function refreshPatientResults(){
@@ -1792,6 +1843,45 @@ function showPatientHero(a){
   if(st.key==='today') chime();
 }
 
+// Modale auto-injectée (aucune modification d'index.html requise) pour
+// choisir une nouvelle date + heure via de vrais sélecteurs natifs
+// (<input type=date>/<input type=time>), plutôt que des prompt() en texte
+// libre. "min" empêche physiquement de sélectionner une date passée ou
+// aujourd'hui — seules les dates strictement futures sont proposées.
+function openRescheduleModal(apptId){
+  document.getElementById('rescheduleModal')?.remove();
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  const minDate = tomorrow.toISOString().slice(0,10);
+  const overlay = document.createElement('div');
+  overlay.id = 'rescheduleModal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+  overlay.innerHTML = `
+    <div style="background:var(--cream);color:var(--ink);border-radius:16px;padding:22px;max-width:340px;width:100%;box-shadow:var(--shadow);">
+      <h3 style="margin:0 0 14px;font-size:17px;">Nouvelle date souhaitée</h3>
+      <label style="display:block;font-size:13px;margin-bottom:4px;">Date</label>
+      <input type="date" id="reschedDateInput" min="${minDate}" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink);margin-bottom:12px;">
+      <label style="display:block;font-size:13px;margin-bottom:4px;">Heure</label>
+      <input type="time" id="reschedTimeInput" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink);margin-bottom:18px;">
+      <div style="display:flex;gap:8px;">
+        <button id="reschedCancelBtn" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer;">Annuler</button>
+        <button id="reschedConfirmBtn" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--teal);color:#fff;cursor:pointer;">Envoyer</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = ()=> overlay.remove();
+  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) close(); });
+  document.getElementById('reschedCancelBtn').addEventListener('click', close);
+  document.getElementById('reschedConfirmBtn').addEventListener('click', async ()=>{
+    const newDate = document.getElementById('reschedDateInput').value;
+    const newTime = document.getElementById('reschedTimeInput').value;
+    if(!newDate){ alert("Choisis une date."); return; }
+    if(newDate < minDate){ alert("Merci de choisir une date à partir de demain."); return; }
+    if(!newTime){ alert("Choisis une heure."); return; }
+    close();
+    await submitPatientRequest(apptId, {type:'reschedule', requestedDate:newDate, requestedTime:newTime, requestedAt:new Date().toISOString()});
+  });
+}
+
 async function submitPatientRequest(apptId, request){
   try{
     await updateDoc(doc(db,"appointments",apptId), {patientRequest: request});
@@ -1809,11 +1899,7 @@ document.getElementById('patientHeroWrap').addEventListener('click', async (e)=>
       await submitPatientRequest(cancelBtn.dataset.id, {type:'cancel', requestedAt:new Date().toISOString()});
     }
   } else if(reschedBtn){
-    const newDate = prompt("Nouvelle date souhaitée (AAAA-MM-JJ) :");
-    if(!newDate || !/^\d{4}-\d{2}-\d{2}$/.test(newDate)){ if(newDate) alert("Format de date invalide."); return; }
-    const newTime = prompt("Nouvelle heure souhaitée (HH:MM) :");
-    if(!newTime || !/^\d{2}:\d{2}$/.test(newTime)){ if(newTime) alert("Format d'heure invalide."); return; }
-    await submitPatientRequest(reschedBtn.dataset.id, {type:'reschedule', requestedDate:newDate, requestedTime:newTime, requestedAt:new Date().toISOString()});
+    openRescheduleModal(reschedBtn.dataset.id);
   } else if(retractBtn){
     await submitPatientRequest(retractBtn.dataset.id, {});
   }
