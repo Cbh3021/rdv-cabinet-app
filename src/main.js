@@ -896,6 +896,23 @@ async function setHonoredStatus(id, value){
   }
   else if(a){ a.honored=value; renderAdmin(); }
 }
+// Cache mémoire (le temps de la session) des stats de fidélité par patient,
+// pour éviter de relire Firestore à chaque carte affichée. getCachedLoyalty
+// retourne la valeur en cache si dispo (synchrone), sinon lance la lecture
+// en arrière-plan et redessine une fois prête via onReady.
+const patientStatsCache = new Map();
+function getCachedLoyalty(phone, onReady){
+  if(!phone) return null;
+  if(patientStatsCache.has(phone)) return patientStatsCache.get(phone);
+  if(isConfigured){
+    getArchivedPatientStats(phone).then(stats=>{
+      patientStatsCache.set(phone, stats);
+      onReady();
+    });
+  }
+  return null;
+}
+
 function rdvCardHtml(a){
   const st = statusOf(a);
   const req = a.patientRequest;
@@ -916,6 +933,7 @@ function rdvCardHtml(a){
       </div></div>`;
   }
   let honoredBanner = '';
+  let loyaltyHtml = '';
   if(st.key === 'past'){
     if(a.honored === true){
       honoredBanner = `<div class="honor-badge honor-yes">✅ Honoré <button class="mini-link" data-honor-action="clear" data-id="${a.id}">Modifier</button></div>`;
@@ -926,6 +944,11 @@ function rdvCardHtml(a){
         <button class="btn-secondary" data-honor-action="yes" data-id="${a.id}" style="flex:1;padding:6px;font-size:12.5px;">✅ Honoré</button>
         <button class="btn-secondary" data-honor-action="no" data-id="${a.id}" style="flex:1;padding:6px;font-size:12.5px;">❌ Non présenté</button>
       </div>`;
+    }
+    const stats = getCachedLoyalty(a.phone, renderAdmin);
+    if(stats){
+      const score = computeLoyaltyScore(stats);
+      if(score!==null) loyaltyHtml = loyaltyBarHtml(score, stats.currentStreak||0);
     }
   }
   return `<div class="rdv-card">
@@ -946,6 +969,7 @@ function rdvCardHtml(a){
       </div>
       ${reqBanner}
       ${honoredBanner}
+      ${loyaltyHtml}
     </div>`;
 }
 // Carte dédiée à l'historique : contrairement à rdvCardHtml() (RDV actifs),
@@ -955,6 +979,12 @@ function historyCardHtml(a){
   let honorTag = '';
   if(a.honored === true) honorTag = `<span class="honor-tag honor-yes">✅ Honoré</span>`;
   else if(a.honored === false) honorTag = `<span class="honor-tag honor-no">❌ Non présenté</span>`;
+  let loyaltyHtml = '';
+  const stats = getCachedLoyalty(a.phone, renderHistoryList);
+  if(stats){
+    const score = computeLoyaltyScore(stats);
+    if(score!==null) loyaltyHtml = loyaltyBarHtml(score, stats.currentStreak||0);
+  }
   return `<div class="rdv-card">
       <div class="rdv-row">
         <div class="rdv-time">${a.time}</div>
@@ -968,6 +998,7 @@ function historyCardHtml(a){
         <button data-history-delete="${a.id}" title="Supprimer définitivement"
           style="border:1px solid var(--line);background:transparent;color:var(--alert);border-radius:8px;padding:6px 10px;cursor:pointer;">🗑️</button>
       </div>
+      ${loyaltyHtml}
     </div>`;
 }
 
