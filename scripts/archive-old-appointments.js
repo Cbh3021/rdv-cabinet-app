@@ -43,24 +43,56 @@ function cutoffDateKeyInTunis() {
 // où le médecin clique — statsCounted:true le signale. Ici on ne rattrape
 // que les RDV jamais marqués avant leur archivage (statsCounted absent),
 // pour ne jamais compter deux fois le même RDV.
+//
+// La chaîne (currentStreak/longestStreak) doit être rejouée dans le même
+// ordre chronologique que le ferait un clic manuel — sinon elle se
+// désynchronise du score (déjà vu : score 100% mais "aucune chaîne en
+// cours" pour un RDV compté uniquement par ce rattrapage automatique).
+// Comme la chaîne dépend de l'ordre des RDV (pas juste d'un delta additif),
+// on part de l'état actuel du patient et on la rejoue RDV par RDV.
 async function updatePatientStats(batchAppts) {
-  const deltas = new Map(); // phone -> {honored, absent, total}
+  const byPhone = new Map(); // phone -> appts[]
   for (const appt of batchAppts) {
     if (!appt.phone) continue;
-    const d = deltas.get(appt.phone) || { honored: 0, absent: 0, total: 0 };
-    d.total += 1;
-    if (!appt.statsCounted) {
-      if (appt.honored === true) d.honored += 1;
-      else if (appt.honored === false) d.absent += 1;
-    }
-    deltas.set(appt.phone, d);
+    if (!byPhone.has(appt.phone)) byPhone.set(appt.phone, []);
+    byPhone.get(appt.phone).push(appt);
   }
-  for (const [phone, d] of deltas) {
-    await db.collection("patients").doc(phone).set(
+
+  for (const [phone, appts] of byPhone) {
+    const totalDelta = appts.length;
+    const uncounted = appts
+      .filter((a) => !a.statsCounted && (a.honored === true || a.honored === false))
+      .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+
+    const patientRef = db.collection("patients").doc(phone);
+
+    if (uncounted.length === 0) {
+      await patientRef.set({ totalCount: FieldValue.increment(totalDelta) }, { merge: true });
+      continue;
+    }
+
+    const honoredDelta = uncounted.filter((a) => a.honored === true).length;
+    const absentDelta = uncounted.filter((a) => a.honored === false).length;
+
+    const snap = await patientRef.get();
+    let currentStreak = snap.exists() ? snap.data().currentStreak || 0 : 0;
+    let longestStreak = snap.exists() ? snap.data().longestStreak || 0 : 0;
+    for (const a of uncounted) {
+      if (a.honored === true) {
+        currentStreak += 1;
+        if (currentStreak > longestStreak) longestStreak = currentStreak;
+      } else {
+        currentStreak = 0; // un RDV raté casse la chaîne (même logique que main.js)
+      }
+    }
+
+    await patientRef.set(
       {
-        totalCount: FieldValue.increment(d.total),
-        honoredCount: FieldValue.increment(d.honored),
-        absentCount: FieldValue.increment(d.absent),
+        totalCount: FieldValue.increment(totalDelta),
+        honoredCount: FieldValue.increment(honoredDelta),
+        absentCount: FieldValue.increment(absentDelta),
+        currentStreak,
+        longestStreak,
       },
       { merge: true }
     );
