@@ -913,7 +913,7 @@ function getCachedLoyalty(phone, onReady){
   return null;
 }
 
-function rdvCardHtml(a){
+function rdvCardHtml(a, loyaltyShown){
   const st = statusOf(a);
   const req = a.patientRequest;
   let reqBanner = '';
@@ -945,10 +945,21 @@ function rdvCardHtml(a){
         <button class="btn-secondary" data-honor-action="no" data-id="${a.id}" style="flex:1;padding:6px;font-size:12.5px;">❌ Non présenté</button>
       </div>`;
     }
+  }
+  // Score de fidélité global (Firestore, patients/{phone}) : un seul par
+  // patient dans la liste rendue, pas un par carte. On réserve la place
+  // sur la première carte rencontrée pour ce téléphone — comme upcoming
+  // est parcouru avant past (voir renderAdmin), ça revient à l'afficher
+  // sur son prochain RDV à venir, et seulement à défaut sur son dernier
+  // RDV passé. loyaltyShown est un Set neuf à chaque appel de renderAdmin.
+  if(loyaltyShown && !loyaltyShown.has(a.phone)){
     const stats = getCachedLoyalty(a.phone, renderAdmin);
     if(stats){
       const score = computeLoyaltyScore(stats);
-      if(score!==null) loyaltyHtml = loyaltyBarHtml(score, stats.currentStreak||0);
+      if(score!==null){
+        loyaltyHtml = loyaltyBarHtml(score, stats.currentStreak||0);
+        loyaltyShown.add(a.phone);
+      }
     }
   }
   return `<div class="rdv-card">
@@ -975,15 +986,20 @@ function rdvCardHtml(a){
 // Carte dédiée à l'historique : contrairement à rdvCardHtml() (RDV actifs),
 // pas de "Modifier" ni de demandes patient (n'a plus de sens sur un RDV déjà
 // passé et archivé) — seulement la suppression définitive.
-function historyCardHtml(a){
+function historyCardHtml(a, loyaltyShown){
   let honorTag = '';
   if(a.honored === true) honorTag = `<span class="honor-tag honor-yes">✅ Honoré</span>`;
   else if(a.honored === false) honorTag = `<span class="honor-tag honor-no">❌ Non présenté</span>`;
   let loyaltyHtml = '';
-  const stats = getCachedLoyalty(a.phone, renderHistoryList);
-  if(stats){
-    const score = computeLoyaltyScore(stats);
-    if(score!==null) loyaltyHtml = loyaltyBarHtml(score, stats.currentStreak||0);
+  if(loyaltyShown && !loyaltyShown.has(a.phone)){
+    const stats = getCachedLoyalty(a.phone, renderHistoryList);
+    if(stats){
+      const score = computeLoyaltyScore(stats);
+      if(score!==null){
+        loyaltyHtml = loyaltyBarHtml(score, stats.currentStreak||0);
+        loyaltyShown.add(a.phone);
+      }
+    }
   }
   return `<div class="rdv-card">
       <div class="rdv-row">
@@ -1148,9 +1164,10 @@ function renderHistoryList(){
     list.innerHTML = `<div class="empty"><div>Aucun rendez-vous archivé pour l'instant.</div></div>`;
   } else {
     let html='', lastDate=null;
+    const loyaltyShown = new Set();
     historyItems.forEach(a=>{
       if(a.date!==lastDate){ html += `<div class="day-heading">${fmtDate(a.date)}</div>`; lastDate=a.date; }
-      html += historyCardHtml(a);
+      html += historyCardHtml(a, loyaltyShown);
     });
     list.innerHTML = html;
   }
@@ -1183,6 +1200,11 @@ function renderAdmin(){
   const upcoming = all.filter(a=>statusOf(a).key!=='past').sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time));
   const past = all.filter(a=>statusOf(a).key==='past').sort((a,b)=> (b.date+b.time).localeCompare(a.date+a.time));
 
+  // Un seul Set par rendu : réserve la barre de fidélité au premier RDV
+  // rencontré pour chaque patient (upcoming d'abord, donc priorité au
+  // prochain RDV à venir ; à défaut, son dernier RDV passé).
+  const loyaltyShown = new Set();
+
   let html='', lastDate=null;
   if(upcoming.length===0){
     html += `<div class="empty"><div class="display">${t('no_rdv_admin_title')}</div><div>${t('no_rdv_admin_sub')}</div></div>`;
@@ -1192,7 +1214,7 @@ function renderAdmin(){
         html += `<div class="day-heading">${fmtDate(a.date)}</div>`;
         lastDate=a.date;
       }
-      html += rdvCardHtml(a);
+      html += rdvCardHtml(a, loyaltyShown);
     });
   }
 
@@ -1204,7 +1226,7 @@ function renderAdmin(){
         html += `<div class="day-heading">${fmtDate(a.date)}</div>`;
         lastPastDate=a.date;
       }
-      html += rdvCardHtml(a);
+      html += rdvCardHtml(a, loyaltyShown);
     });
   }
 
