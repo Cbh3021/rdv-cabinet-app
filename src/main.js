@@ -779,12 +779,19 @@ async function editAppointment(id, data){
   if(isConfigured) await updateDoc(doc(db,"appointments",id), data);
   else { Object.assign(appointments.find(x=>x.id===id), data); renderAdmin(); }
 }
-async function removeAppointment(id){
+async function removeAppointment(id, trackCancellation=true){
   // Suppression "douce" : le RDV est marqué supprimé mais reste en base,
   // récupérable depuis la Corbeille. Évite la perte définitive en cas de
   // clic accidentel.
+  const a = appointments.find(x=>x.id===id);
+  // Comptabilise l'annulation sur la fiche patient (voir recordCancellation)
+  // — pour TOUTE suppression d'un RDV actif à venir/passé, que ce soit un
+  // clic direct du médecin ou l'acceptation d'une demande patient. Exclu
+  // volontairement lors d'une suppression de compte patient en masse
+  // (trackCancellation=false) : ce n'est pas une vraie annulation.
+  if(trackCancellation && a && !a.deleted) await recordCancellation(a.phone, a.date, a.time);
   if(isConfigured) await updateDoc(doc(db,"appointments",id), {deleted:true, deletedAt:new Date().toISOString()});
-  else { const a = appointments.find(x=>x.id===id); if(a){ a.deleted=true; a.deletedAt=new Date().toISOString(); renderAdmin(); } }
+  else { if(a){ a.deleted=true; a.deletedAt=new Date().toISOString(); renderAdmin(); } }
 }
 async function restoreAppointment(id){
   if(isConfigured) await updateDoc(doc(db,"appointments",id), {deleted:false});
@@ -793,6 +800,23 @@ async function restoreAppointment(id){
 async function permanentlyDeleteAppointment(id){
   if(isConfigured) await deleteDoc(doc(db,"appointments",id));
   else { appointments = appointments.filter(x=>x.id!==id); renderAdmin(); }
+}
+
+// Comptabilise une annulation acceptée sur la fiche patient (patients/{phone}),
+// en distinguant une annulation "tardive" — dans les 48h précédant le RDV,
+// donc peu de temps pour reproposer le créneau à quelqu'un d'autre — d'une
+// annulation faite largement à l'avance, qui ne pénalise pas le patient.
+async function recordCancellation(phone, apptDate, apptTime){
+  if(!isConfigured || !phone) return;
+  const apptDateTime = new Date(apptDate + 'T' + apptTime + ':00');
+  const hoursBefore = (apptDateTime.getTime() - Date.now()) / 3600000;
+  const isLate = hoursBefore < 48;
+  try{
+    await setDoc(doc(db,"patients", phone), {
+      cancelCount: increment(1),
+      lateCancelCount: increment(isLate ? 1 : 0),
+    }, { merge:true });
+  }catch(e){ console.error("Erreur comptage annulation", e); }
 }
 
 /* ---------------- ADMIN: render list ---------------- */
@@ -1163,7 +1187,7 @@ document.getElementById('rdvList').addEventListener('click', async (e)=>{
     if(!a) return;
     const req = a.patientRequest;
     if(reqBtn.dataset.reqAction==='accept-cancel'){
-      await removeAppointment(a.id); // passe en Corbeille, récupérable
+      await removeAppointment(a.id); // passe en Corbeille, récupérable + comptabilise l'annulation
       await notifyRequestOutcome(a.phone, {type:'cancel', status:'accepted', requestedDate:a.date, requestedTime:a.time});
     } else if(reqBtn.dataset.reqAction==='accept-reschedule'){
       const conflict = appointments.find(x=>!x.deleted && x.date===req.requestedDate && x.time===req.requestedTime && x.id!==a.id);
@@ -1437,18 +1461,29 @@ document.getElementById('resetCodeBtn').addEventListener('click', async ()=>{
 async function refreshBlockStatus(){
   const raw = document.getElementById('findCodePhone').value.trim();
   const phone = toE164(raw);
-  const msgEl = document.getElementById('blockStatusMsg');
-
-  // Taux de présence : calculé à partir des RDV déjà chargés en mémoire
-  // côté médecin, aucune lecture Firestore supplémentaire nécessaire.
-  const pastMarked = appointments.filter(a=>!a.deleted && a.phone===phone && statusOf(a).key==='past' && a.honored != null);
-  const honoredCount = pastMarked.filter(a=>a.honored===true).length;
   const attendanceEl = document.getElementById('attendanceStatusMsg');
-  attendanceEl.textContent = pastMarked.length > 0
-    ? '📊 Taux de présence : ' + honoredCount + '/' + pastMarked.length + ' RDV honorés.'
-    : '';
 
-  if(!isConfigured){ msgEl.textContent = ''; return; }
+  // Taux de présence sur tout l'historique : ce qui est encore dans la
+  // fenêtre active (en mémoire) + les compteurs archivés (patients/{phone},
+  // maintenus par scripts/archive-old-appointments.js). Avant ce correctif,
+  // seuls les 90 derniers jours étaient comptés ici une fois l'archivage en
+  // place — corrigé pour matcher exactement ce qui est affiché côté patient.
+  const pastMarked = appointments.filter(a=>!a.deleted && a.phone===phone && statusOf(a).key==='past' && a.honored != null);
+  const activeHonored = pastMarked.filter(a=>a.honored===true).length;
+  const archived = isConfigured ? await getArchivedPatientStats(phone) : { honoredCount:0, absentCount:0, cancelCount:0, lateCancelCount:0 };
+  const honoredCount = activeHonored + (archived.honoredCount || 0);
+  const totalMarked = pastMarked.length + (archived.honoredCount || 0) + (archived.absentCount || 0);
+
+  let lines = [];
+  if(totalMarked > 0) lines.push('📊 Taux de présence : ' + honoredCount + '/' + totalMarked + ' RDV honorés.');
+  if(archived.cancelCount > 0){
+    lines.push('🔁 Annulations : ' + archived.cancelCount + ' au total, dont '
+      + (archived.lateCancelCount||0) + ' tardive(s) (moins de 48h avant le RDV).');
+  }
+  attendanceEl.textContent = lines.join(' ');
+
+  if(!isConfigured){ document.getElementById('blockStatusMsg').textContent = ''; return; }
+  const msgEl = document.getElementById('blockStatusMsg');
   try{
     const snap = await getDoc(doc(db,"contacts", phone));
     const blockedFrom = snap.exists() ? snap.data().blockedFrom : null;
@@ -1506,7 +1541,7 @@ document.getElementById('deletePatientBtn').addEventListener('click', async ()=>
   try{
     // Déplace ses RDV dans la Corbeille plutôt que de les effacer d'un coup.
     const toDelete = appointments.filter(a=>a.phone===phone && !a.deleted);
-    for(const a of toDelete) await removeAppointment(a.id);
+    for(const a of toDelete) await removeAppointment(a.id, false);
     if(isConfigured) await deleteDoc(doc(db,"contacts", phone));
     document.getElementById('findCodeOverlay').classList.remove('open');
     alert("Patient supprimé. Ses " + toDelete.length + " RDV sont dans la Corbeille si besoin de les restaurer.");
