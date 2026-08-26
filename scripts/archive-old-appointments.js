@@ -38,14 +38,21 @@ function cutoffDateKeyInTunis() {
 
 // Incrémente les compteurs patients/{phone} pour un lot de RDV migrés.
 // Regroupe par téléphone avant d'écrire, pour minimiser les écritures.
+// IMPORTANT : depuis l'ajout du score de fidélité temps réel côté client
+// (setHonoredStatus dans main.js), honoré/absent est déjà compté au moment
+// où le médecin clique — statsCounted:true le signale. Ici on ne rattrape
+// que les RDV jamais marqués avant leur archivage (statsCounted absent),
+// pour ne jamais compter deux fois le même RDV.
 async function updatePatientStats(batchAppts) {
   const deltas = new Map(); // phone -> {honored, absent, total}
   for (const appt of batchAppts) {
     if (!appt.phone) continue;
     const d = deltas.get(appt.phone) || { honored: 0, absent: 0, total: 0 };
     d.total += 1;
-    if (appt.honored === true) d.honored += 1;
-    else if (appt.honored === false) d.absent += 1;
+    if (!appt.statsCounted) {
+      if (appt.honored === true) d.honored += 1;
+      else if (appt.honored === false) d.absent += 1;
+    }
     deltas.set(appt.phone, d);
   }
   for (const [phone, d] of deltas) {

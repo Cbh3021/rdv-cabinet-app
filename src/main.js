@@ -776,6 +776,15 @@ async function createAppointment(data){
   else { appointments.push({id:uid(), ...data}); renderAdmin(); }
 }
 async function editAppointment(id, data){
+  // Si la date/heure change réellement, c'est un report — on le
+  // comptabilise sur la fiche patient (voir recordReschedule), qu'il vienne
+  // d'une demande patient acceptée ou d'un décalage fait directement par le
+  // médecin pour le compte du patient (cas fréquent : le patient appelle
+  // plutôt que d'utiliser l'appli).
+  const before = appointments.find(x=>x.id===id);
+  if(before && data.date && data.time && (data.date!==before.date || data.time!==before.time)){
+    await recordReschedule(before.phone, before.date, before.time);
+  }
   if(isConfigured) await updateDoc(doc(db,"appointments",id), data);
   else { Object.assign(appointments.find(x=>x.id===id), data); renderAdmin(); }
 }
@@ -802,21 +811,34 @@ async function permanentlyDeleteAppointment(id){
   else { appointments = appointments.filter(x=>x.id!==id); renderAdmin(); }
 }
 
-// Comptabilise une annulation acceptée sur la fiche patient (patients/{phone}),
-// en distinguant une annulation "tardive" — dans les 48h précédant le RDV,
-// donc peu de temps pour reproposer le créneau à quelqu'un d'autre — d'une
-// annulation faite largement à l'avance, qui ne pénalise pas le patient.
+// Comptabilise une annulation sur la fiche patient (patients/{phone}), en
+// distinguant une annulation "tardive" — moins de 48h avant le RDV, donc peu
+// de temps pour reproposer le créneau — d'une annulation anticipée. Seuil
+// facilement ajustable ici si 48h ne convient pas.
+const LATE_NOTICE_HOURS = 48;
 async function recordCancellation(phone, apptDate, apptTime){
   if(!isConfigured || !phone) return;
-  const apptDateTime = new Date(apptDate + 'T' + apptTime + ':00');
-  const hoursBefore = (apptDateTime.getTime() - Date.now()) / 3600000;
-  const isLate = hoursBefore < 48;
+  const hoursBefore = (new Date(apptDate+'T'+apptTime+':00').getTime() - Date.now()) / 3600000;
+  const isLate = hoursBefore < LATE_NOTICE_HOURS;
   try{
     await setDoc(doc(db,"patients", phone), {
       cancelCount: increment(1),
       lateCancelCount: increment(isLate ? 1 : 0),
     }, { merge:true });
   }catch(e){ console.error("Erreur comptage annulation", e); }
+}
+// Même principe pour un report — la lateness se mesure par rapport à la
+// date D'ORIGINE du RDV décalé (pas la nouvelle date proposée).
+async function recordReschedule(phone, originalDate, originalTime){
+  if(!isConfigured || !phone) return;
+  const hoursBefore = (new Date(originalDate+'T'+originalTime+':00').getTime() - Date.now()) / 3600000;
+  const isLate = hoursBefore < LATE_NOTICE_HOURS;
+  try{
+    await setDoc(doc(db,"patients", phone), {
+      rescheduleCount: increment(1),
+      lateRescheduleCount: increment(isLate ? 1 : 0),
+    }, { merge:true });
+  }catch(e){ console.error("Erreur comptage report", e); }
 }
 
 /* ---------------- ADMIN: render list ---------------- */
@@ -835,8 +857,44 @@ async function notifyRequestOutcome(phone, outcome){
   }catch(e){ console.error("Erreur notification patient", e); }
 }
 async function setHonoredStatus(id, value){
-  if(isConfigured) await updateDoc(doc(db,"appointments",id), {honored:value});
-  else { const a = appointments.find(x=>x.id===id); if(a){ a.honored=value; renderAdmin(); } }
+  const a = appointments.find(x=>x.id===id);
+  if(isConfigured && a){
+    try{
+      // Compte en temps réel (plus besoin d'attendre le passage nocturne du
+      // script d'archivage) — statsCounted évite un double comptage le jour
+      // où ce RDV sera archivé (voir archive-old-appointments.js).
+      const wasCounted = a.statsCounted === true;
+      const wasHonored = a.honored;
+      const updates = {};
+      if(value === true){
+        if(!wasCounted || wasHonored !== true){
+          updates.honoredCount = increment(1);
+          if(wasCounted && wasHonored === false) updates.absentCount = increment(-1);
+          updates.currentStreak = increment(1);
+        }
+      } else if(value === false){
+        if(!wasCounted || wasHonored !== false){
+          updates.absentCount = increment(1);
+          if(wasCounted && wasHonored === true) updates.honoredCount = increment(-1);
+        }
+        updates.currentStreak = 0; // un RDV raté casse la chaîne
+      } else if(value === null && wasCounted){
+        // Annulation d'un marquage précédent (bouton "Modifier" sur le badge).
+        if(wasHonored === true) updates.honoredCount = increment(-1);
+        else if(wasHonored === false) updates.absentCount = increment(-1);
+      }
+      if(Object.keys(updates).length) await setDoc(doc(db,"patients", a.phone), updates, {merge:true});
+      // Suivi du record de la plus longue chaîne, pour référence.
+      if(value === true){
+        const snap = await getDoc(doc(db,"patients", a.phone));
+        const cur = snap.exists() ? (snap.data().currentStreak||0) : 0;
+        const longest = snap.exists() ? (snap.data().longestStreak||0) : 0;
+        if(cur > longest) await setDoc(doc(db,"patients", a.phone), {longestStreak: cur}, {merge:true});
+      }
+    }catch(e){ console.error("Erreur mise à jour stats fidélité", e); }
+    await updateDoc(doc(db,"appointments",id), {honored:value, statsCounted: value!==null});
+  }
+  else if(a){ a.honored=value; renderAdmin(); }
 }
 function rdvCardHtml(a){
   const st = statusOf(a);
@@ -1458,29 +1516,59 @@ document.getElementById('resetCodeBtn').addEventListener('click', async ()=>{
     document.getElementById('resetCodeStatusMsg').textContent = "Erreur d'envoi. Vérifie ta connexion et réessaie.";
   }
 });
+// Pondérations du score de fidélité — ajustables ici sans toucher au reste.
+// honoré = plein point ; absence = zéro ; annulation/report anticipé (avant
+// LATE_NOTICE_HOURS) = pénalité légère ; tardif = pénalité plus lourde.
+const LOYALTY_WEIGHTS = { honored:1, absent:0, cancelEarly:0.5, cancelLate:0.15, reschedEarly:0.7, reschedLate:0.35 };
+
+function computeLoyaltyScore(stats){
+  const honored = stats.honoredCount||0, absent = stats.absentCount||0;
+  const cancelLate = stats.lateCancelCount||0, cancelEarly = Math.max((stats.cancelCount||0)-cancelLate,0);
+  const reschedLate = stats.lateRescheduleCount||0, reschedEarly = Math.max((stats.rescheduleCount||0)-reschedLate,0);
+  const totalEvents = honored+absent+cancelEarly+cancelLate+reschedEarly+reschedLate;
+  if(totalEvents===0) return null;
+  const weighted = honored*LOYALTY_WEIGHTS.honored + absent*LOYALTY_WEIGHTS.absent
+    + cancelEarly*LOYALTY_WEIGHTS.cancelEarly + cancelLate*LOYALTY_WEIGHTS.cancelLate
+    + reschedEarly*LOYALTY_WEIGHTS.reschedEarly + reschedLate*LOYALTY_WEIGHTS.reschedLate;
+  return Math.round((weighted/totalEvents)*100);
+}
+
+function loyaltyBarHtml(score, streak){
+  if(score===null) return '';
+  const color = score>=75 ? 'var(--teal)' : score>=45 ? 'var(--amber)' : 'var(--alert)';
+  const streakLine = streak>0
+    ? `🔥 ${streak} RDV honoré${streak>1?'s':''} d'affilée depuis la dernière absence.`
+    : `Aucune chaîne en cours.`;
+  return `<div style="margin-top:8px;">
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+      <span>Fidélité</span><span>${score}%</span>
+    </div>
+    <div style="height:8px;border-radius:5px;background:var(--line);overflow:hidden;">
+      <div style="height:100%;width:${score}%;background:${color};border-radius:5px;"></div>
+    </div>
+    <div style="font-size:12px;margin-top:6px;color:var(--ink);opacity:.75;">${streakLine}</div>
+  </div>`;
+}
+
 async function refreshBlockStatus(){
   const raw = document.getElementById('findCodePhone').value.trim();
   const phone = toE164(raw);
   const attendanceEl = document.getElementById('attendanceStatusMsg');
 
-  // Taux de présence sur tout l'historique : ce qui est encore dans la
-  // fenêtre active (en mémoire) + les compteurs archivés (patients/{phone},
-  // maintenus par scripts/archive-old-appointments.js). Avant ce correctif,
-  // seuls les 90 derniers jours étaient comptés ici une fois l'archivage en
-  // place — corrigé pour matcher exactement ce qui est affiché côté patient.
-  const pastMarked = appointments.filter(a=>!a.deleted && a.phone===phone && statusOf(a).key==='past' && a.honored != null);
-  const activeHonored = pastMarked.filter(a=>a.honored===true).length;
-  const archived = isConfigured ? await getArchivedPatientStats(phone) : { honoredCount:0, absentCount:0, cancelCount:0, lateCancelCount:0 };
-  const honoredCount = activeHonored + (archived.honoredCount || 0);
-  const totalMarked = pastMarked.length + (archived.honoredCount || 0) + (archived.absentCount || 0);
+  // patients/{phone} est désormais la SEULE source de vérité pour
+  // honoré/absent/annulé/reporté : mis à jour en temps réel dès que le
+  // médecin marque un RDV, annule ou décale (voir setHonoredStatus,
+  // recordCancellation, recordReschedule) — plus besoin de re-scanner les
+  // RDV en mémoire (ça les compterait deux fois).
+  const stats = isConfigured ? await getArchivedPatientStats(phone)
+    : { honoredCount:0, absentCount:0, cancelCount:0, lateCancelCount:0, rescheduleCount:0, lateRescheduleCount:0, currentStreak:0 };
+  const score = computeLoyaltyScore(stats);
 
   let lines = [];
-  if(totalMarked > 0) lines.push('📊 Taux de présence : ' + honoredCount + '/' + totalMarked + ' RDV honorés.');
-  if(archived.cancelCount > 0){
-    lines.push('🔁 Annulations : ' + archived.cancelCount + ' au total, dont '
-      + (archived.lateCancelCount||0) + ' tardive(s) (moins de 48h avant le RDV).');
-  }
-  attendanceEl.textContent = lines.join(' ');
+  if(stats.honoredCount||stats.absentCount) lines.push('📊 ' + stats.honoredCount + '/' + (stats.honoredCount+stats.absentCount) + ' RDV honorés.');
+  if(stats.cancelCount) lines.push('🔁 ' + stats.cancelCount + ' annulation(s), dont ' + (stats.lateCancelCount||0) + ' tardive(s).');
+  if(stats.rescheduleCount) lines.push('📅 ' + stats.rescheduleCount + ' report(s), dont ' + (stats.lateRescheduleCount||0) + ' tardif(s).');
+  attendanceEl.innerHTML = lines.join('<br>') + loyaltyBarHtml(score, stats.currentStreak||0);
 
   if(!isConfigured){ document.getElementById('blockStatusMsg').textContent = ''; return; }
   const msgEl = document.getElementById('blockStatusMsg');
@@ -1689,14 +1777,15 @@ function patientLoginErrorMessage(e){
 // Compteurs maintenus par scripts/archive-old-appointments.js : totalCount,
 // honoredCount, absentCount. Couvre tout l'historique déjà archivé ; on
 // l'additionne avec ce qui est encore dans la fenêtre active en mémoire.
+const EMPTY_PATIENT_STATS = { honoredCount:0, absentCount:0, totalCount:0, cancelCount:0, lateCancelCount:0, rescheduleCount:0, lateRescheduleCount:0, currentStreak:0, longestStreak:0 };
 async function getArchivedPatientStats(phone){
-  if(!isConfigured || !phone) return { honoredCount:0, absentCount:0, totalCount:0 };
+  if(!isConfigured || !phone) return {...EMPTY_PATIENT_STATS};
   try{
     const snap = await getDoc(doc(db,"patients", phone));
-    return snap.exists() ? snap.data() : { honoredCount:0, absentCount:0, totalCount:0 };
+    return snap.exists() ? {...EMPTY_PATIENT_STATS, ...snap.data()} : {...EMPTY_PATIENT_STATS};
   }catch(e){
     console.error("Erreur lecture stats patient", e);
-    return { honoredCount:0, absentCount:0, totalCount:0 };
+    return {...EMPTY_PATIENT_STATS};
   }
 }
 
@@ -1820,19 +1909,15 @@ async function refreshPatientResults(){
   }
   if(restPast.length>0){
     // Petit résumé motivant, factuel et sans jugement — juste un rappel
-    // que la présence aux RDV compte, sans culpabiliser.
-    // On combine ce qui est encore dans la fenêtre active (en mémoire) avec
-    // les compteurs de l'archive (patients/{phone}), pour un taux calculé
-    // sur tout l'historique, sans jamais avoir à recharger les vieux RDV.
-    const pastMarked = mine.filter(a=>statusOf(a).key==='past' && a.honored != null);
-    const activeHonored = pastMarked.filter(a=>a.honored===true).length;
-    const archived = await getArchivedPatientStats(patientPhoneE164);
-    const honoredCount = activeHonored + (archived.honoredCount || 0);
-    const totalMarked = pastMarked.length + (archived.honoredCount || 0) + (archived.absentCount || 0);
+    // que la présence aux RDV compte, sans culpabiliser. patients/{phone}
+    // est la seule source de vérité désormais (mise à jour en temps réel),
+    // plus besoin d'ajouter un scan en mémoire (double comptage sinon).
+    const stats = await getArchivedPatientStats(patientPhoneE164);
+    const totalMarked = (stats.honoredCount||0) + (stats.absentCount||0);
     let attendanceLine = '';
     if(totalMarked > 0){
       attendanceLine = `<div style="font-size:12.5px;color:#6b6f80;margin:-6px 0 14px;">
-        📊 ${honoredCount}/${totalMarked} rendez-vous honorés — merci de prévenir le cabinet en cas d'empêchement.</div>`;
+        📊 ${stats.honoredCount||0}/${totalMarked} rendez-vous honorés — merci de prévenir le cabinet en cas d'empêchement.</div>`;
     }
     otherHtml += `<div class="day-heading" style="margin-top:32px;">${t('archived_rdv')}</div>${attendanceLine}` + restPast.map(cardHtml).join('');
   }
