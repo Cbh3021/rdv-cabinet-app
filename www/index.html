@@ -32,15 +32,6 @@
      fond sombre + texte sombre) par-dessus nos boutons en mode sombre —
      meme cause que le bug email/mot de passe deja corrige sur les inputs. */
   button{appearance:none;-webkit-appearance:none;font-family:inherit;color:inherit;}
-  .honor-summary{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:14px;
-    font-size:13px;font-weight:600;color:var(--muted);}
-  .honor-pill{display:inline-flex;align-items:center;justify-content:center;min-width:38px;
-    height:20px;padding:0 7px;border-radius:10px;margin-left:8px;vertical-align:middle;
-    flex-shrink:0;font-size:11.5px;font-weight:700;line-height:1;color:#fff;
-    box-shadow:0 0 0 2px var(--card);}
-  .honor-pill-empty{display:none !important;}
-  .honor-pill-lg{min-width:48px;height:26px;padding:0 10px;border-radius:13px;
-    font-size:13.5px;margin-left:0;box-shadow:0 0 0 3px var(--card);}
   html{color-scheme:light;}
   html[data-theme="dark"]{color-scheme:dark;}
   body{margin:0;background:var(--cream);color:var(--ink);font-family:'Manrope',sans-serif;-webkit-font-smoothing:antialiased;transition:background .15s,color .15s;}
@@ -122,7 +113,6 @@
   .rdv-info{flex:1;min-width:0;}
   .rdv-info .name{font-weight:700;font-size:15px;overflow-wrap:break-word;}
   .rdv-info .meta{font-size:12.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .honor-pill-below{margin-top:10px;margin-left:0;}
   .status-pill{font-size:10.5px;font-weight:800;padding:4px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;flex-shrink:0;}
   .menu-btn{border:none;background:var(--btn2);width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:16px;
     line-height:1;color:var(--ink);flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;}
@@ -474,117 +464,6 @@
       pwToggle.title = hidden ? 'Masquer le mot de passe' : 'Afficher le mot de passe';
     });
   }
-})();
-// ===== Temoin visuel de fiabilite patient (RDV honores / total) =====
-// Fonctionne par observation du DOM deja rendu par app.js (aucune
-// modification du coeur de l'app), donc reste synchronise avec tout
-// re-rendu (recherche, changement de statut honore, etc.)
-(function(){
-  function honorColor(ratio){
-    // 0 = rouge (--alert), 0.5 = ambre (--amber), 1 = vert/teal (--teal)
-    var stops = [[224,83,61],[255,178,107],[63,169,162]];
-    ratio = Math.max(0, Math.min(1, ratio));
-    var a, b, t;
-    if (ratio <= 0.5) { a = stops[0]; b = stops[1]; t = ratio/0.5; }
-    else { a = stops[1]; b = stops[2]; t = (ratio-0.5)/0.5; }
-    var c = a.map(function(v,i){ return Math.round(v + (b[i]-v)*t); });
-    return 'rgb('+c[0]+','+c[1]+','+c[2]+')';
-  }
-
-  function makePill(ratio, pct, label){
-    var p = document.createElement('span');
-    p.className = 'honor-pill' + (ratio === null ? ' honor-pill-empty' : '');
-    p.title = label;
-    p.style.background = ratio === null ? 'var(--line)' : honorColor(ratio);
-    p.textContent = ratio === null ? '' : (pct + '%');
-    return p;
-  }
-
-  // ---------- Cote medecin : liste des RDV ----------
-  function computeAdminStats(){
-    var cards = document.querySelectorAll('#rdvList .rdv-card');
-    var stats = {};
-    cards.forEach(function(card){
-      var meta = card.querySelector('.rdv-info .meta');
-      if (!meta) return;
-      var parts = (meta.textContent || '').split('\u00B7');
-      var phone = parts.length > 1 ? parts[parts.length - 1].trim() : null;
-      if (!phone) return;
-      var isYes = !!card.querySelector('.honor-badge.honor-yes');
-      var isNo = !!card.querySelector('.honor-badge.honor-no');
-      if (!isYes && !isNo) return;
-      if (!stats[phone]) stats[phone] = { yes: 0, total: 0 };
-      stats[phone].total++;
-      if (isYes) stats[phone].yes++;
-    });
-    return stats;
-  }
-
-  function decorateAdminList(){
-    var list = document.getElementById('rdvList');
-    if (!list) return;
-    var stats = computeAdminStats();
-    var decorated = {};
-    list.querySelectorAll('.rdv-card').forEach(function(card){
-      var existing = card.querySelector('.honor-pill');
-      if (existing) existing.remove();
-      var isYes = !!card.querySelector('.honor-badge.honor-yes');
-      var isNo = !!card.querySelector('.honor-badge.honor-no');
-      if (!isYes && !isNo) return; // pastille uniquement sur la carte du RDV passe marque
-      var meta = card.querySelector('.rdv-info .meta');
-      if (!meta) return;
-      var parts = (meta.textContent || '').split('\u00B7');
-      var phone = parts.length > 1 ? parts[parts.length - 1].trim() : null;
-      if (!phone || decorated[phone]) return; // deja affichee pour ce patient (carte plus recente)
-      var s = stats[phone];
-      if (!s || s.total === 0) return;
-      var ratio = s.yes / s.total, pct = Math.round(ratio * 100);
-      var pill = makePill(ratio, pct, s.yes + '/' + s.total + ' RDV honorés (' + pct + '%)');
-      pill.classList.add('honor-pill-below');
-      card.appendChild(pill);
-      decorated[phone] = true;
-    });
-  }
-
-  var adminDebounce;
-  var adminObserver = new MutationObserver(function(){
-    clearTimeout(adminDebounce);
-    adminDebounce = setTimeout(decorateAdminList, 30);
-  });
-  var listEl = document.getElementById('rdvList');
-  if (listEl) adminObserver.observe(listEl, { childList: true, subtree: true });
-
-  // ---------- Cote patient : fiche personnelle ----------
-  function decoratePatientHero(){
-    var wrap = document.getElementById('otherRdvWrap');
-    var heroWrap = document.getElementById('patientHeroWrap');
-    if (!wrap || !heroWrap) return;
-    var existing = heroWrap.querySelector('.honor-summary');
-    if (existing) existing.remove();
-    var m = (wrap.textContent || '').match(/(\d+)\s*\/\s*(\d+)\s*rendez-vous honor/);
-    if (!m) return;
-    var yes = parseInt(m[1], 10), total = parseInt(m[2], 10);
-    if (!total) return;
-    var ratio = yes / total, pct = Math.round(ratio * 100);
-    var holder = document.createElement('div');
-    holder.className = 'honor-summary';
-    var label = document.createElement('span');
-    label.textContent = 'Fiabilité RDV';
-    var pill = makePill(ratio, pct, yes + '/' + total + ' RDV honorés (' + pct + '%)');
-    pill.classList.add('honor-pill-lg');
-    holder.appendChild(label);
-    holder.appendChild(pill);
-    var heroCard = heroWrap.querySelector('.patient-hero') || heroWrap;
-    heroCard.appendChild(holder);
-  }
-
-  var patientDebounce;
-  var patientObserver = new MutationObserver(function(){
-    clearTimeout(patientDebounce);
-    patientDebounce = setTimeout(decoratePatientHero, 30);
-  });
-  var resultWrap = document.getElementById('patientResultWrap');
-  if (resultWrap) patientObserver.observe(resultWrap, { childList: true, subtree: true, characterData: true });
 })();
 </script>
 <script type="module" src="app.js"></script>
