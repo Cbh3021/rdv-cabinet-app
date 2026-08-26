@@ -31,3 +31,7 @@ android/app/src/main/assets/capacitor.plugins.json
 # Logs
 *.log
 npm-debug.log*
+
+# Clé Firebase Admin (accès total Firestore) — jamais dans le repo
+service-account.json
+scripts/service-account.json
