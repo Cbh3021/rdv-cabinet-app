@@ -262,6 +262,8 @@ const TRANSLATIONS = {
     admin_login_title: "Connexion médecin", admin_login_sub: "Connecte-toi avec ton compte pour gérer les rendez-vous.",
     email_label: "Email", password_label: "Mot de passe", login_btn: "Se connecter",
     login_error: "Identifiants incorrects.",
+    login_error_network: "Erreur de connexion — vérifiez votre connexion internet et réessayez.",
+    login_error_too_many: "Trop de tentatives — réessayez dans quelques minutes.",
     not_authorized_error: "Ce compte n'est pas autorisé comme médecin sur cette appli.",
     verify_error: "Erreur de vérification du compte. Réessaie.",
     rdv_title: "Rendez-vous", add_rdv: "+ Fixer un RDV",
@@ -324,6 +326,8 @@ const TRANSLATIONS = {
     admin_login_title: "تسجيل دخول الطبيب", admin_login_sub: "سجّل الدخول لحسابك لإدارة المواعيد.",
     email_label: "البريد الإلكتروني", password_label: "كلمة السر", login_btn: "تسجيل الدخول",
     login_error: "بيانات الدخول غير صحيحة.",
+    login_error_network: "خطأ في الاتصال — تحقق من اتصالك بالإنترنت وحاول مجددًا.",
+    login_error_too_many: "محاولات كثيرة جدًا — أعد المحاولة بعد قليل.",
     not_authorized_error: "هذا الحساب غير مصرح له كطبيب في هذا التطبيق.",
     verify_error: "خطأ في التحقق من الحساب. حاول مجدداً.",
     rdv_title: "المواعيد", add_rdv: "+ تحديد موعد",
@@ -674,7 +678,13 @@ document.getElementById('adminLoginBtn').addEventListener('click', async ()=>{
     await signInWithEmailAndPassword(auth, email, pwd);
     await checkAdminAndEnter();
   }catch(e){
-    showAdminError(t('login_error'));
+    if(e && e.code === 'auth/network-request-failed'){
+      showAdminError(t('login_error_network'));
+    }else if(e && e.code === 'auth/too-many-requests'){
+      showAdminError(t('login_error_too_many'));
+    }else{
+      showAdminError(t('login_error'));
+    }
   }finally{
     btn.disabled = false;
   }
