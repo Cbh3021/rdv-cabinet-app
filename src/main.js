@@ -65,6 +65,8 @@ import {
 import { Capacitor } from "@capacitor/core";
 import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 import { FirebaseMessaging } from "@capacitor-firebase/messaging";
+import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
 
 const isNative = Capacitor.isNativePlatform();
 
@@ -1755,14 +1757,39 @@ function buildCsv(){
   });
   return rows.map(r=>r.map(v=>'"' + String(v).replace(/"/g,'""') + '"').join(',')).join('\r\n');
 }
-document.getElementById('exportCsvBtn').addEventListener('click', ()=>{
+document.getElementById('exportCsvBtn').addEventListener('click', async ()=>{
+  const csv = "\uFEFF" + buildCsv(); // BOM pour un bon affichage des accents dans Excel
+  const fileName = "rdv-cabinet-" + todayStr() + ".csv";
+
+  if(isNative){
+    // Sur Android/iOS, la technique Blob + <a download> ne fonctionne pas dans une WebView :
+    // on écrit le fichier via Filesystem puis on ouvre la boîte de partage native.
+    try{
+      const result = await Filesystem.writeFile({
+        path: fileName,
+        data: csv,
+        directory: Directory.Cache,
+        encoding: Encoding.UTF8
+      });
+      await Share.share({
+        title: "Export RDV Cabinet",
+        text: "Export des rendez-vous (" + todayStr() + ")",
+        url: result.uri,
+        dialogTitle: "Exporter / partager le CSV"
+      });
+    }catch(e){
+      console.error("Erreur export CSV (natif)", e);
+      alert("Échec de l'export CSV : " + (e && e.message ? e.message : e));
+    }
+    return;
+  }
+
   try{
-    const csv = "\uFEFF" + buildCsv(); // BOM pour un bon affichage des accents dans Excel
     const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = "rdv-cabinet-" + todayStr() + ".csv";
+    a.download = fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
