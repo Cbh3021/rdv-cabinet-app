@@ -1,0 +1,47 @@
+name: Heartbeat (garde les workflows planifiés actifs)
+
+# GitHub désactive automatiquement les workflows "schedule:" d'un dépôt
+# après 60 jours SANS AUCUN commit poussé dessus (voir la doc GitHub
+# Actions). Comme ce dépôt n'a normalement plus de commits une fois
+# l'appli finie, les rappels/archivages/etc. s'arrêteraient un jour sans
+# aucune alerte visible. Ce job pousse un tout petit commit automatique
+# chaque mois — largement sous les 60 jours — juste pour que GitHub
+# considère le dépôt comme "actif" et garde tous les autres workflows
+# planifiés opérationnels. Ne fait rien d'autre.
+on:
+  schedule:
+    # Le 1er de chaque mois à 04:00 UTC (décalé des autres workflows planifiés).
+    - cron: '0 4 1 * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Mettre à jour l'horodatage du heartbeat
+        run: |
+          mkdir -p .github
+          date -u +"Dernier heartbeat : %Y-%m-%d %H:%M UTC" > .github/HEARTBEAT.md
+          echo "" >> .github/HEARTBEAT.md
+          echo "Ce fichier est mis à jour automatiquement chaque mois par" >> .github/HEARTBEAT.md
+          echo "le workflow heartbeat.yml, uniquement pour empêcher GitHub" >> .github/HEARTBEAT.md
+          echo "de désactiver les workflows planifiés (schedule) après 60" >> .github/HEARTBEAT.md
+          echo "jours d'inactivité du dépôt. Aucune action manuelle requise." >> .github/HEARTBEAT.md
+
+      - name: Commit et push si changement
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/HEARTBEAT.md
+          if git diff --cached --quiet; then
+            echo "Rien à committer."
+          else
+            git commit -m "chore: heartbeat mensuel (garde les workflows planifiés actifs)"
+            git push
+          fi
