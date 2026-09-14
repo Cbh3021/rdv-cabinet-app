@@ -304,6 +304,8 @@ const TRANSLATIONS = {
     cancel_btn: "Annuler", save_btn: "Enregistrer",
     footer_text: "Outil interne de gestion des rendez-vous",
     delete_confirm: "Supprimer le RDV de",
+    reminder0_title: "Rappel de rendez-vous",
+    reminder0_msg: "Rappel : tu as rendez-vous avec Dr Hédi Belhoula dans une semaine.",
     reminder1_title: "Rappel de rendez-vous",
     reminder1_msg: "Petit rappel : tu as rendez-vous avec Dr Hédi Belhoula dans 3 jours.",
     reminder2_title: "Rendez-vous imminent",
@@ -368,6 +370,8 @@ const TRANSLATIONS = {
     cancel_btn: "إلغاء", save_btn: "حفظ",
     footer_text: "أداة داخلية لإدارة المواعيد",
     delete_confirm: "حذف موعد",
+    reminder0_title: "تذكير بالموعد",
+    reminder0_msg: "تذكير: لديك موعد مع الدكتور الهادي بلحولة بعد أسبوع.",
     reminder1_title: "تذكير بالموعد",
     reminder1_msg: "تذكير بسيط: لديك موعد مع الدكتور الهادي بلحولة بعد 3 أيام.",
     reminder2_title: "موعد وشيك",
@@ -2153,14 +2157,15 @@ document.getElementById('patientHeroWrap').addEventListener('click', async (e)=>
   }
 });
 
-/* ---------------- reminder popup: 1er rappel (J-3) et 2eme rappel (J-1 / jour J) ---------------- */
+/* ---------------- reminder popup: rappel J-7 (stage 0), J-3 (stage 1), J-1/jour J (stage 2) ---------------- */
 function checkReminderPopup(a){
   if(!a) return;
   const diff = daysBetween(todayStr(), a.date);
   let stage = null;
-  if(diff === 3) stage = 1;
+  if(diff === 7) stage = 0;
+  else if(diff === 3) stage = 1;
   else if(diff === 1 || diff === 0) stage = 2;
-  if(!stage) return;
+  if(stage === null) return;
   const key = `reminderShown_${a.id}_${a.date}_stage${stage}`;
   if(localStorage.getItem(key)) return;
   showReminderPopup(a, stage, diff);
@@ -2170,7 +2175,11 @@ function showReminderPopup(a, stage, diff){
   const title = document.getElementById('reminderTitle');
   const msg = document.getElementById('reminderMsg');
   const badge = document.getElementById('reminderBadge');
-  if(stage===1){
+  if(stage===0){
+    title.textContent = t('reminder0_title');
+    msg.textContent = t('reminder0_msg');
+    badge.textContent = '1';
+  } else if(stage===1){
     title.textContent = t('reminder1_title');
     msg.textContent = t('reminder1_msg');
     badge.textContent = '1';

@@ -2,9 +2,14 @@ name: Send appointment reminders
 
 on:
   schedule:
-    # Tous les jours à 07:00 heure de Tunisie (UTC+1 toute l'année, pas de DST)
-    # → 06:00 UTC
+    # Deux passages par jour, heure de Tunisie (UTC+1 toute l'année, pas de DST) :
+    # - 07:00 (06:00 UTC) : passage principal (J-7, J-3, J-1, jour J)
+    # - 13:00 (12:00 UTC) : second passage, uniquement pour rattraper le "jour J"
+    #   (stage 2) d'un RDV pris ce matin même après le passage de 07h — sans lui
+    #   le patient ne recevrait jamais ce rappel. L'idempotence (remindersSent)
+    #   évite tout doublon pour les RDV déjà couverts par le passage de 07h.
     - cron: '0 6 * * *'
+    - cron: '0 12 * * *'
   workflow_dispatch: {}
 
 jobs:

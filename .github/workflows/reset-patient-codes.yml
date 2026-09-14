@@ -3,11 +3,14 @@ name: Réinitialisation des codes patients
 # Tourne toutes les 5 min (le minimum autorisé par GitHub Actions ; le
 # déclenchement réel peut être décalé de quelques minutes en période de
 # forte charge sur GitHub — c'est le compromis du plan gratuit, voir la
-# discussion avec le médecin). "workflow_dispatch" permet aussi de le
-# lancer manuellement depuis l'onglet Actions du dépôt, sans attendre.
+# discussion avec le médecin), mais seulement 06h-21h UTC (= 07h-22h heure
+# de Tunis) : personne ne demande de réinitialisation de code la nuit,
+# inutile de consommer le quota Actions à ce moment. "workflow_dispatch"
+# permet aussi de le lancer manuellement depuis l'onglet Actions du dépôt,
+# sans attendre (utile si un patient en a besoin en pleine nuit malgré tout).
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/5 6-21 * * *"
   workflow_dispatch: {}
 
 jobs:

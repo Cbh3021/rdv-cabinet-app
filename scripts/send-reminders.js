@@ -26,8 +26,9 @@ if (!raw) {
 admin.initializeApp({ credential: admin.credential.cert(JSON.parse(raw)) });
 const db = admin.firestore();
 
-// Aligné sur checkReminderPopup() côté client : J-3 = stage 1, J-1/jour J = stage 2.
+// Aligné sur checkReminderPopup() côté client : J-7 = stage 0, J-3 = stage 1, J-1/jour J = stage 2.
 const REMINDER_STAGES = [
+  { offsetDays: 7, stage: 0 },
   { offsetDays: 3, stage: 1 },
   { offsetDays: 1, stage: 2 },
   { offsetDays: 0, stage: 2 },
@@ -42,10 +43,12 @@ function dateKeyInTunis(offsetDays) {
 
 const MESSAGES = {
   fr: {
+    0: (t) => `Rappel : rendez-vous avec Dr Hédi Belhoula dans une semaine, le ${t}.`,
     1: (t) => `Petit rappel : rendez-vous avec Dr Hédi Belhoula le ${t}.`,
     2: (t) => `Rendez-vous imminent avec Dr Hédi Belhoula : ${t}.`,
   },
   ar: {
+    0: (t) => `تذكير: لديك موعد مع الدكتور الهادي بلحولة بعد أسبوع، يوم ${t}.`,
     1: (t) => `تذكير: لديك موعد مع الدكتور الهادي بلحولة يوم ${t}.`,
     2: (t) => `موعدك مع الدكتور الهادي بلحولة قريب جداً: ${t}.`,
   },
