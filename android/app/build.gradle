@@ -22,6 +22,14 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    // Renomme le fichier APK généré (par défaut "app-debug.apk" / "app-release.apk",
+    // nom du module "app" — n'a aucun rapport avec appName dans capacitor.config.ts)
+    // en "RDV_CBH-<variante>.apk".
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            outputFileName = "RDV_CBH-${variant.name}.apk"
+        }
+    }
 }
 
 repositories {
