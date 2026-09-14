@@ -4,15 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="color-scheme" content="light dark">
+<title>Reminder CBH — Dr Hédi Belhoula</title>
 <script>
+// Anti-flash de thème : pose data-theme AVANT le premier rendu, donc avant
+// que app.js (chargé en <script type="module"> tout en bas de la page) ait
+// eu le temps de s'exécuter. Sans ça, l'appli peint d'abord le thème clair
+// par défaut puis bascule en sombre une fois app.js chargé — flash très
+// visible juste après un vidage de cache, quand app.js met plus longtemps
+// à se télécharger. Doit rester synchrone et rester en tête du <head>.
+// La valeur par défaut ('light') doit rester identique à celle d'app.js
+// (let theme = localStorage.getItem('rdvTheme') || 'light';).
 (function(){
   try{
-    var t = localStorage.getItem('rdvTheme') || 'light';
-    document.documentElement.setAttribute('data-theme', t);
+    var t = localStorage.getItem('rdvTheme');
+    document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
   }catch(e){}
 })();
 </script>
-<title>Reminder CBH — Dr Hédi Belhoula</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -32,6 +40,12 @@
      fond sombre + texte sombre) par-dessus nos boutons en mode sombre —
      meme cause que le bug email/mot de passe deja corrige sur les inputs. */
   button{appearance:none;-webkit-appearance:none;font-family:inherit;color:inherit;}
+  .honor-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-left:8px;
+    vertical-align:middle;box-shadow:0 0 0 2px var(--card);flex-shrink:0;}
+  .honor-dot-empty{display:none !important;}
+  .honor-summary{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;
+    font-size:12.5px;color:var(--muted);}
+  .honor-summary .honor-dot{width:14px;height:14px;margin-left:0;}
   html{color-scheme:light;}
   html[data-theme="dark"]{color-scheme:dark;}
   body{margin:0;background:var(--cream);color:var(--ink);font-family:'Manrope',sans-serif;-webkit-font-smoothing:antialiased;transition:background .15s,color .15s;}
@@ -111,7 +125,7 @@
   .rdv-row{display:flex;align-items:center;gap:12px;}
   .rdv-time{font-family:'Fraunces';font-weight:700;font-size:18px;min-width:52px;text-align:center;}
   .rdv-info{flex:1;min-width:0;}
-  .rdv-info .name{font-weight:700;font-size:15px;overflow-wrap:break-word;}
+  .rdv-info .name{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .rdv-info .meta{font-size:12.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .status-pill{font-size:10.5px;font-weight:800;padding:4px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;flex-shrink:0;}
   .menu-btn{border:none;background:var(--btn2);width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:16px;
@@ -415,7 +429,7 @@
     <h3 style="margin-bottom:8px;">Retrouver un code patient</h3>
     <p style="color:var(--muted);font-size:13px;margin:0 0 14px;">Entre le numéro de téléphone du patient pour retrouver son code de connexion.</p>
     <label style="font-size:13px;font-weight:600;">Téléphone</label>
-    <input type="tel" id="findCodePhone" placeholder="12 345 678" style="width:100%;margin:6px 0 6px;padding:10px;border-radius:10px;border:1px solid var(--line);color:var(--ink);background:var(--card);">
+    <input type="tel" id="findCodePhone" placeholder="12 345 678" style="width:100%;margin:6px 0 6px;padding:10px;border-radius:10px;border:1px solid var(--line);color:var(--ink);background:#fff;">
     <p class="error-text" id="findCodeError" style="display:none;color:var(--alert);font-size:13px;margin:4px 0 0;"></p>
     <div style="display:flex;gap:8px;margin-top:16px;">
       <button class="btn-secondary" id="findCodeCancelBtn">Annuler</button>
@@ -430,7 +444,7 @@
 
     <div id="blockSection" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
       <label style="font-size:13px;font-weight:600;">Bloquer l'accès à partir du</label>
-      <input type="date" id="blockFromDate" style="width:100%;margin:6px 0 8px;padding:10px;border-radius:10px;border:1px solid var(--line);color:var(--ink);background:var(--card);">
+      <input type="date" id="blockFromDate" style="width:100%;margin:6px 0 8px;padding:10px;border-radius:10px;border:1px solid var(--line);color:var(--ink);background:#fff;">
       <div style="display:flex;gap:8px;">
         <button class="btn-secondary" id="unblockPatientBtn" style="flex:1;">✅ Débloquer</button>
         <button class="btn-secondary" id="blockPatientBtn" style="flex:1;color:var(--alert);">🚫 Bloquer</button>
@@ -464,6 +478,114 @@
       pwToggle.title = hidden ? 'Masquer le mot de passe' : 'Afficher le mot de passe';
     });
   }
+})();
+// ===== Temoin visuel de fiabilite patient (RDV honores / total) =====
+// Fonctionne par observation du DOM deja rendu par app.js (aucune
+// modification du coeur de l'app), donc reste synchronise avec tout
+// re-rendu (recherche, changement de statut honore, etc.)
+(function(){
+  function honorColor(ratio){
+    // 0 = rouge (--alert), 0.5 = ambre (--amber), 1 = vert/teal (--teal)
+    var stops = [[224,83,61],[255,178,107],[63,169,162]];
+    ratio = Math.max(0, Math.min(1, ratio));
+    var a, b, t;
+    if (ratio <= 0.5) { a = stops[0]; b = stops[1]; t = ratio/0.5; }
+    else { a = stops[1]; b = stops[2]; t = (ratio-0.5)/0.5; }
+    var c = a.map(function(v,i){ return Math.round(v + (b[i]-v)*t); });
+    return 'rgb('+c[0]+','+c[1]+','+c[2]+')';
+  }
+
+  function makeDot(ratio, label){
+    var d = document.createElement('span');
+    d.className = 'honor-dot' + (ratio === null ? ' honor-dot-empty' : '');
+    d.title = label;
+    d.style.background = ratio === null ? 'var(--line)' : honorColor(ratio);
+    return d;
+  }
+
+  // ---------- Cote medecin : liste des RDV ----------
+  function computeAdminStats(){
+    var cards = document.querySelectorAll('#rdvList .rdv-card');
+    var stats = {};
+    cards.forEach(function(card){
+      var meta = card.querySelector('.rdv-info .meta');
+      if (!meta) return;
+      var parts = (meta.textContent || '').split('\u00B7');
+      var phone = parts.length > 1 ? parts[parts.length - 1].trim() : null;
+      if (!phone) return;
+      var isYes = !!card.querySelector('.honor-badge.honor-yes');
+      var isNo = !!card.querySelector('.honor-badge.honor-no');
+      if (!isYes && !isNo) return;
+      if (!stats[phone]) stats[phone] = { yes: 0, total: 0 };
+      stats[phone].total++;
+      if (isYes) stats[phone].yes++;
+    });
+    return stats;
+  }
+
+  function decorateAdminList(){
+    var list = document.getElementById('rdvList');
+    if (!list) return;
+    var stats = computeAdminStats();
+    list.querySelectorAll('.rdv-card').forEach(function(card){
+      var meta = card.querySelector('.rdv-info .meta');
+      var nameEl = card.querySelector('.rdv-info .name');
+      if (!meta || !nameEl) return;
+      var existing = nameEl.querySelector('.honor-dot');
+      if (existing) existing.remove();
+      var parts = (meta.textContent || '').split('\u00B7');
+      var phone = parts.length > 1 ? parts[parts.length - 1].trim() : null;
+      if (!phone) return;
+      var s = stats[phone];
+      var dot;
+      if (!s || s.total === 0) {
+        dot = makeDot(null, 'Historique insuffisant pour ce patient');
+      } else {
+        var ratio = s.yes / s.total, pct = Math.round(ratio * 100);
+        dot = makeDot(ratio, s.yes + '/' + s.total + ' RDV honorés (' + pct + '%)');
+      }
+      nameEl.appendChild(dot);
+    });
+  }
+
+  var adminDebounce;
+  var adminObserver = new MutationObserver(function(){
+    clearTimeout(adminDebounce);
+    adminDebounce = setTimeout(decorateAdminList, 30);
+  });
+  var listEl = document.getElementById('rdvList');
+  if (listEl) adminObserver.observe(listEl, { childList: true, subtree: true });
+
+  // ---------- Cote patient : fiche personnelle ----------
+  function decoratePatientHero(){
+    var wrap = document.getElementById('otherRdvWrap');
+    var heroWrap = document.getElementById('patientHeroWrap');
+    if (!wrap || !heroWrap) return;
+    var existing = heroWrap.querySelector('.honor-summary');
+    if (existing) existing.remove();
+    var m = (wrap.textContent || '').match(/(\d+)\s*\/\s*(\d+)\s*rendez-vous honor/);
+    if (!m) return;
+    var yes = parseInt(m[1], 10), total = parseInt(m[2], 10);
+    if (!total) return;
+    var ratio = yes / total, pct = Math.round(ratio * 100);
+    var holder = document.createElement('div');
+    holder.className = 'honor-summary';
+    var dot = makeDot(ratio, yes + '/' + total + ' RDV honorés');
+    var span = document.createElement('span');
+    span.textContent = 'Fiabilité RDV : ' + pct + '%';
+    holder.appendChild(dot);
+    holder.appendChild(span);
+    var heroCard = heroWrap.querySelector('.patient-hero') || heroWrap;
+    heroCard.appendChild(holder);
+  }
+
+  var patientDebounce;
+  var patientObserver = new MutationObserver(function(){
+    clearTimeout(patientDebounce);
+    patientDebounce = setTimeout(decoratePatientHero, 30);
+  });
+  var resultWrap = document.getElementById('patientResultWrap');
+  if (resultWrap) patientObserver.observe(resultWrap, { childList: true, subtree: true, characterData: true });
 })();
 </script>
 <script type="module" src="app.js"></script>

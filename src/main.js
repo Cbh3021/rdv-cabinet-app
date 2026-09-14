@@ -65,6 +65,8 @@ import {
 import { Capacitor } from "@capacitor/core";
 import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 import { FirebaseMessaging } from "@capacitor-firebase/messaging";
+import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
 
 const isNative = Capacitor.isNativePlatform();
 
@@ -262,6 +264,8 @@ const TRANSLATIONS = {
     admin_login_title: "Connexion médecin", admin_login_sub: "Connecte-toi avec ton compte pour gérer les rendez-vous.",
     email_label: "Email", password_label: "Mot de passe", login_btn: "Se connecter",
     login_error: "Identifiants incorrects.",
+    login_error_network: "Erreur de connexion — vérifiez votre connexion internet et réessayez.",
+    login_error_too_many: "Trop de tentatives — réessayez dans quelques minutes.",
     not_authorized_error: "Ce compte n'est pas autorisé comme médecin sur cette appli.",
     verify_error: "Erreur de vérification du compte. Réessaie.",
     rdv_title: "Rendez-vous", add_rdv: "+ Fixer un RDV",
@@ -324,6 +328,8 @@ const TRANSLATIONS = {
     admin_login_title: "تسجيل دخول الطبيب", admin_login_sub: "سجّل الدخول لحسابك لإدارة المواعيد.",
     email_label: "البريد الإلكتروني", password_label: "كلمة السر", login_btn: "تسجيل الدخول",
     login_error: "بيانات الدخول غير صحيحة.",
+    login_error_network: "خطأ في الاتصال — تحقق من اتصالك بالإنترنت وحاول مجددًا.",
+    login_error_too_many: "محاولات كثيرة جدًا — أعد المحاولة بعد قليل.",
     not_authorized_error: "هذا الحساب غير مصرح له كطبيب في هذا التطبيق.",
     verify_error: "خطأ في التحقق من الحساب. حاول مجدداً.",
     rdv_title: "المواعيد", add_rdv: "+ تحديد موعد",
@@ -674,7 +680,13 @@ document.getElementById('adminLoginBtn').addEventListener('click', async ()=>{
     await signInWithEmailAndPassword(auth, email, pwd);
     await checkAdminAndEnter();
   }catch(e){
-    showAdminError(t('login_error'));
+    if(e && e.code === 'auth/network-request-failed'){
+      showAdminError(t('login_error_network'));
+    }else if(e && e.code === 'auth/too-many-requests'){
+      showAdminError(t('login_error_too_many'));
+    }else{
+      showAdminError(t('login_error'));
+    }
   }finally{
     btn.disabled = false;
   }
@@ -1248,12 +1260,13 @@ function subscribeContacts(){
   }, err=>console.error("Firestore contacts listener error", err));
 }
 function refreshNameSuggestions(){
-  const dl = document.getElementById('nameSuggestions');
-  if(!dl) return;
-  const seen = new Set();
-  dl.innerHTML = contacts
-    .filter(c=>{ if(seen.has(c.name)) return false; seen.add(c.name); return true; })
-    .map(c=>`<option value="${escapeHtml(c.name)}"></option>`).join('');
+  // Ne fait plus que garder `contacts` à jour ; le filtrage/affichage se
+  // fait dans l'écouteur "input" ci-dessous (liste déroulante maison,
+  // plus fiable que <datalist> qui, sur certaines WebView Android,
+  // affiche toute la liste sans filtrer selon ce qui est tapé).
+  if(document.activeElement === document.getElementById('fName')){
+    renderNameSuggestBox(document.getElementById('fName').value.trim());
+  }
 }
 async function saveContact(name, phone, extra){
   if(!name || !phone) return;
@@ -1272,11 +1285,48 @@ function contactHasAccount(phone){
   const c = contacts.find(c=>c.phone===phone);
   return !!(c && c.hasAccount);
 }
+function renderNameSuggestBox(query){
+  const box = document.getElementById('nameSuggestBox');
+  if(!box) return;
+  if(!query){ box.classList.remove('open'); box.innerHTML=''; return; }
+  const q = query.toLowerCase();
+  const seen = new Set();
+  const matches = contacts
+    .filter(c=>{
+      if(!c.name || !c.name.toLowerCase().includes(q)) return false;
+      if(seen.has(c.name)) return false;
+      seen.add(c.name);
+      return true;
+    })
+    .slice(0, 6);
+  if(matches.length===0){ box.classList.remove('open'); box.innerHTML=''; return; }
+  box.innerHTML = matches.map(c=>
+    `<div class="name-suggest-item" data-name="${escapeHtml(c.name)}" data-phone="${escapeHtml(c.phone||'')}">${escapeHtml(c.name)}</div>`
+  ).join('');
+  box.classList.add('open');
+}
+document.getElementById('nameSuggestBox').addEventListener('mousedown', (e)=>{
+  // mousedown (pas click) pour agir avant le blur du champ fName
+  const item = e.target.closest('.name-suggest-item');
+  if(!item) return;
+  e.preventDefault();
+  document.getElementById('fName').value = item.dataset.name;
+  if(item.dataset.phone) document.getElementById('fPhone').value = phoneDigits(item.dataset.phone);
+  document.getElementById('nameSuggestBox').classList.remove('open');
+});
 document.getElementById('fName').addEventListener('input', ()=>{
   const name = document.getElementById('fName').value.trim();
+  renderNameSuggestBox(name);
   if(!name) return;
   const match = contacts.find(c => c.name.toLowerCase() === name.toLowerCase());
   if(match) document.getElementById('fPhone').value = phoneDigits(match.phone);
+});
+document.getElementById('fName').addEventListener('focus', ()=>{
+  renderNameSuggestBox(document.getElementById('fName').value.trim());
+});
+document.getElementById('fName').addEventListener('blur', ()=>{
+  // léger délai pour laisser le mousedown de l'item s'exécuter avant de fermer
+  setTimeout(()=>{ document.getElementById('nameSuggestBox').classList.remove('open'); }, 120);
 });
 
 document.getElementById('rdvList').addEventListener('click', async (e)=>{
@@ -1745,14 +1795,39 @@ function buildCsv(){
   });
   return rows.map(r=>r.map(v=>'"' + String(v).replace(/"/g,'""') + '"').join(',')).join('\r\n');
 }
-document.getElementById('exportCsvBtn').addEventListener('click', ()=>{
+document.getElementById('exportCsvBtn').addEventListener('click', async ()=>{
+  const csv = "\uFEFF" + buildCsv(); // BOM pour un bon affichage des accents dans Excel
+  const fileName = "rdv-cabinet-" + todayStr() + ".csv";
+
+  if(isNative){
+    // Sur Android/iOS, la technique Blob + <a download> ne fonctionne pas dans une WebView :
+    // on écrit le fichier via Filesystem puis on ouvre la boîte de partage native.
+    try{
+      const result = await Filesystem.writeFile({
+        path: fileName,
+        data: csv,
+        directory: Directory.Cache,
+        encoding: Encoding.UTF8
+      });
+      await Share.share({
+        title: "Export RDV Cabinet",
+        text: "Export des rendez-vous (" + todayStr() + ")",
+        url: result.uri,
+        dialogTitle: "Exporter / partager le CSV"
+      });
+    }catch(e){
+      console.error("Erreur export CSV (natif)", e);
+      alert("Échec de l'export CSV : " + (e && e.message ? e.message : e));
+    }
+    return;
+  }
+
   try{
-    const csv = "\uFEFF" + buildCsv(); // BOM pour un bon affichage des accents dans Excel
     const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = "rdv-cabinet-" + todayStr() + ".csv";
+    a.download = fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
