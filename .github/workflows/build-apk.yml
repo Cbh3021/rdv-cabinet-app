@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Récupérer le code
+      - name: RÃ©cupÃ©rer le code
         uses: actions/checkout@v4
 
       - name: Installer Node.js
@@ -23,7 +23,7 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Installer les dépendances npm
+      - name: Installer les dÃ©pendances npm
         run: npm install
 
       - name: Compiler le bundle JS de l'appli
@@ -32,15 +32,15 @@ jobs:
       - name: Synchroniser le projet Android
         run: npx cap sync android
 
-      - name: Rendre gradlew exécutable
+      - name: Rendre gradlew exÃ©cutable
         run: chmod +x android/gradlew
 
       - name: Compiler l'APK (debug)
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Publier l'APK comme fichier téléchargeable
+      - name: Publier l'APK comme fichier tÃ©lÃ©chargeable
         uses: actions/upload-artifact@v4
         with:
           name: rdv-cabinet-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/debug/*.apk
