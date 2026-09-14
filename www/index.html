@@ -40,12 +40,6 @@
      fond sombre + texte sombre) par-dessus nos boutons en mode sombre —
      meme cause que le bug email/mot de passe deja corrige sur les inputs. */
   button{appearance:none;-webkit-appearance:none;font-family:inherit;color:inherit;}
-  .honor-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-left:8px;
-    vertical-align:middle;box-shadow:0 0 0 2px var(--card);flex-shrink:0;}
-  .honor-dot-empty{display:none !important;}
-  .honor-summary{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;
-    font-size:12.5px;color:var(--muted);}
-  .honor-summary .honor-dot{width:14px;height:14px;margin-left:0;}
   html{color-scheme:light;}
   html[data-theme="dark"]{color-scheme:dark;}
   body{margin:0;background:var(--cream);color:var(--ink);font-family:'Manrope',sans-serif;-webkit-font-smoothing:antialiased;transition:background .15s,color .15s;}
@@ -486,114 +480,6 @@
       pwToggle.title = hidden ? 'Masquer le mot de passe' : 'Afficher le mot de passe';
     });
   }
-})();
-// ===== Temoin visuel de fiabilite patient (RDV honores / total) =====
-// Fonctionne par observation du DOM deja rendu par app.js (aucune
-// modification du coeur de l'app), donc reste synchronise avec tout
-// re-rendu (recherche, changement de statut honore, etc.)
-(function(){
-  function honorColor(ratio){
-    // 0 = rouge (--alert), 0.5 = ambre (--amber), 1 = vert/teal (--teal)
-    var stops = [[224,83,61],[255,178,107],[63,169,162]];
-    ratio = Math.max(0, Math.min(1, ratio));
-    var a, b, t;
-    if (ratio <= 0.5) { a = stops[0]; b = stops[1]; t = ratio/0.5; }
-    else { a = stops[1]; b = stops[2]; t = (ratio-0.5)/0.5; }
-    var c = a.map(function(v,i){ return Math.round(v + (b[i]-v)*t); });
-    return 'rgb('+c[0]+','+c[1]+','+c[2]+')';
-  }
-
-  function makeDot(ratio, label){
-    var d = document.createElement('span');
-    d.className = 'honor-dot' + (ratio === null ? ' honor-dot-empty' : '');
-    d.title = label;
-    d.style.background = ratio === null ? 'var(--line)' : honorColor(ratio);
-    return d;
-  }
-
-  // ---------- Cote medecin : liste des RDV ----------
-  function computeAdminStats(){
-    var cards = document.querySelectorAll('#rdvList .rdv-card');
-    var stats = {};
-    cards.forEach(function(card){
-      var meta = card.querySelector('.rdv-info .meta');
-      if (!meta) return;
-      var parts = (meta.textContent || '').split('\u00B7');
-      var phone = parts.length > 1 ? parts[parts.length - 1].trim() : null;
-      if (!phone) return;
-      var isYes = !!card.querySelector('.honor-badge.honor-yes');
-      var isNo = !!card.querySelector('.honor-badge.honor-no');
-      if (!isYes && !isNo) return;
-      if (!stats[phone]) stats[phone] = { yes: 0, total: 0 };
-      stats[phone].total++;
-      if (isYes) stats[phone].yes++;
-    });
-    return stats;
-  }
-
-  function decorateAdminList(){
-    var list = document.getElementById('rdvList');
-    if (!list) return;
-    var stats = computeAdminStats();
-    list.querySelectorAll('.rdv-card').forEach(function(card){
-      var meta = card.querySelector('.rdv-info .meta');
-      var nameEl = card.querySelector('.rdv-info .name');
-      if (!meta || !nameEl) return;
-      var existing = nameEl.querySelector('.honor-dot');
-      if (existing) existing.remove();
-      var parts = (meta.textContent || '').split('\u00B7');
-      var phone = parts.length > 1 ? parts[parts.length - 1].trim() : null;
-      if (!phone) return;
-      var s = stats[phone];
-      var dot;
-      if (!s || s.total === 0) {
-        dot = makeDot(null, 'Historique insuffisant pour ce patient');
-      } else {
-        var ratio = s.yes / s.total, pct = Math.round(ratio * 100);
-        dot = makeDot(ratio, s.yes + '/' + s.total + ' RDV honorés (' + pct + '%)');
-      }
-      nameEl.appendChild(dot);
-    });
-  }
-
-  var adminDebounce;
-  var adminObserver = new MutationObserver(function(){
-    clearTimeout(adminDebounce);
-    adminDebounce = setTimeout(decorateAdminList, 30);
-  });
-  var listEl = document.getElementById('rdvList');
-  if (listEl) adminObserver.observe(listEl, { childList: true, subtree: true });
-
-  // ---------- Cote patient : fiche personnelle ----------
-  function decoratePatientHero(){
-    var wrap = document.getElementById('otherRdvWrap');
-    var heroWrap = document.getElementById('patientHeroWrap');
-    if (!wrap || !heroWrap) return;
-    var existing = heroWrap.querySelector('.honor-summary');
-    if (existing) existing.remove();
-    var m = (wrap.textContent || '').match(/(\d+)\s*\/\s*(\d+)\s*rendez-vous honor/);
-    if (!m) return;
-    var yes = parseInt(m[1], 10), total = parseInt(m[2], 10);
-    if (!total) return;
-    var ratio = yes / total, pct = Math.round(ratio * 100);
-    var holder = document.createElement('div');
-    holder.className = 'honor-summary';
-    var dot = makeDot(ratio, yes + '/' + total + ' RDV honorés');
-    var span = document.createElement('span');
-    span.textContent = 'Fiabilité RDV : ' + pct + '%';
-    holder.appendChild(dot);
-    holder.appendChild(span);
-    var heroCard = heroWrap.querySelector('.patient-hero') || heroWrap;
-    heroCard.appendChild(holder);
-  }
-
-  var patientDebounce;
-  var patientObserver = new MutationObserver(function(){
-    clearTimeout(patientDebounce);
-    patientDebounce = setTimeout(decoratePatientHero, 30);
-  });
-  var resultWrap = document.getElementById('patientResultWrap');
-  if (resultWrap) patientObserver.observe(resultWrap, { childList: true, subtree: true, characterData: true });
 })();
 </script>
 <script type="module" src="app.js"></script>
