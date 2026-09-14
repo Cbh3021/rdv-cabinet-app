@@ -164,6 +164,14 @@
   .field-row{display:flex;gap:10px;}
   .field-row .field{flex:1;}
   .field-hint{font-size:11px;color:var(--muted2);margin-top:4px;}
+  .name-suggest-box{display:none;position:absolute;left:0;right:0;top:100%;margin-top:4px;
+    background:var(--card);border:1px solid var(--line);border-radius:10px;
+    max-height:180px;overflow-y:auto;z-index:40;box-shadow:0 8px 20px rgba(0,0,0,.35);}
+  .name-suggest-box.open{display:block;}
+  .name-suggest-item{padding:10px 14px;font-size:14px;cursor:pointer;color:var(--ink);
+    border-bottom:1px solid var(--line);}
+  .name-suggest-item:last-child{border-bottom:none;}
+  .name-suggest-item:active,.name-suggest-item.active{background:var(--teal);color:#fff;}
   .modal-actions{display:flex;gap:10px;margin-top:18px;}
   .btn-secondary{flex:1;background:var(--btn2);border:none;padding:12px;border-radius:12px;font-weight:700;cursor:pointer;}
   .btn-primary.wide{flex:1;}
@@ -351,10 +359,10 @@
 <div class="overlay" id="overlay">
   <div class="modal">
     <h3 id="modalTitle">Fixer un rendez-vous</h3>
-    <div class="field">
+    <div class="field" style="position:relative;">
       <label id="nameLabel">Nom du patient</label>
-      <input type="text" id="fName" placeholder="Nom et prénom" list="nameSuggestions" autocomplete="off">
-      <datalist id="nameSuggestions"></datalist>
+      <input type="text" id="fName" placeholder="Nom et prénom" autocomplete="off">
+      <div id="nameSuggestBox" class="name-suggest-box"></div>
     </div>
     <div class="field">
       <label id="phoneFieldLabel">Numéro de téléphone</label>
