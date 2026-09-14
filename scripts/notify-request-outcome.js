@@ -19,6 +19,12 @@ if (!raw) {
 }
 admin.initializeApp({ credential: admin.credential.cert(JSON.parse(raw)) });
 const db = admin.firestore();
+// Force le transport REST plutôt que gRPC : les requêtes filtrées (.where)
+// utilisent en interne un flux gRPC (RunQuery) plus sensible aux erreurs de
+// transport ("PERMISSION_DENIED: Received HTTP status code 403" sporadique,
+// bug connu de @grpc/grpc-js) que de simples lectures/écritures ponctuelles.
+// Même logique que experimentalForceLongPolling côté client dans main.js.
+db.settings({ preferRest: true });
 
 const MESSAGES = {
   fr: {
