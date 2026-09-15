@@ -21,7 +21,17 @@
    9. Le patient ne crée plus lui-même son compte : c'est le médecin qui le
       crée depuis l'appli au moment du 1er RDV (bouton "Enregistrer"), et le
       code s'affiche dans une popup à recopier/donner au patient.
-   10. Notifications push (optionnel, 100% gratuit — pas de plan Blaze).
+   10. App Check (recommandé, optionnel — protège Firestore/Auth contre les
+       requêtes venant d'ailleurs que de cette appli, même avec la clé API
+       exposée). Voir la section "App Check" du README pour le détail complet
+       (rollout en mode Monitor avant Enforced, sous peine de bloquer
+       l'appli). Version web ci-dessous : remplace APP_CHECK_SITE_KEY par ta
+       clé de site reCAPTCHA v3 (console.firebase.google.com > App Check >
+       Apps > enregistrer l'app Web > reCAPTCHA v3). Tant que la valeur reste
+       "YOUR_RECAPTCHA_V3_SITE_KEY", App Check est simplement désactivé (zéro
+       impact sur l'appli actuelle). Version Android (Play Integrity) non
+       incluse ici — voir README.
+   11. Notifications push (optionnel, 100% gratuit — pas de plan Blaze).
        Appli distribuée UNIQUEMENT en APK (pas de version web) → on utilise
        le push NATIF Android via le plugin @capacitor-firebase/messaging,
        pas le VAPID/service-worker web :
@@ -50,9 +60,16 @@ const firebaseConfig = {
 };
 const COUNTRY_CODE = "216"; // Tunisie
 
+// App Check (web uniquement pour l'instant — voir section "App Check" du
+// README pour la version Android/Play Integrity). Reste inactif tant que
+// cette valeur n'est pas remplacée par une vraie clé de site reCAPTCHA v3 :
+// aucun impact sur l'appli si tu ne t'en occupes pas tout de suite.
+const APP_CHECK_SITE_KEY = "YOUR_RECAPTCHA_V3_SITE_KEY";
+
 const isConfigured = firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY";
 
 import { initializeApp, deleteApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import {
   initializeFirestore, persistentLocalCache, persistentSingleTabManager,
   collection, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc,
@@ -73,6 +90,19 @@ const isNative = Capacitor.isNativePlatform();
 let db=null, auth=null, apptsCol=null, contactsCol=null, apptsHistoryCol=null, patientsCol=null;
 if(isConfigured){
   const app = initializeApp(firebaseConfig);
+  // App Check web (reCAPTCHA v3) : ne s'active que si isNative est faux ET
+  // qu'une vraie clé de site a été renseignée ci-dessus. Enveloppé dans un
+  // try/catch pour ne jamais bloquer le démarrage de l'appli même en cas de
+  // mauvaise config (domaine non autorisé, clé invalide, etc.) — vérifie
+  // plutôt la console navigateur si besoin de déboguer.
+  if(!isNative && APP_CHECK_SITE_KEY !== "YOUR_RECAPTCHA_V3_SITE_KEY"){
+    try{
+      initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(APP_CHECK_SITE_KEY),
+        isTokenAutoRefreshEnabled: true
+      });
+    }catch(e){ console.error("App Check: initialisation échouée", e); }
+  }
   db = initializeFirestore(app, {
     localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() }),
     experimentalForceLongPolling: true,
@@ -304,8 +334,6 @@ const TRANSLATIONS = {
     cancel_btn: "Annuler", save_btn: "Enregistrer",
     footer_text: "Outil interne de gestion des rendez-vous",
     delete_confirm: "Supprimer le RDV de",
-    reminder0_title: "Rappel de rendez-vous",
-    reminder0_msg: "Rappel : tu as rendez-vous avec Dr Hédi Belhoula dans une semaine.",
     reminder1_title: "Rappel de rendez-vous",
     reminder1_msg: "Petit rappel : tu as rendez-vous avec Dr Hédi Belhoula dans 3 jours.",
     reminder2_title: "Rendez-vous imminent",
@@ -370,8 +398,6 @@ const TRANSLATIONS = {
     cancel_btn: "إلغاء", save_btn: "حفظ",
     footer_text: "أداة داخلية لإدارة المواعيد",
     delete_confirm: "حذف موعد",
-    reminder0_title: "تذكير بالموعد",
-    reminder0_msg: "تذكير: لديك موعد مع الدكتور الهادي بلحولة بعد أسبوع.",
     reminder1_title: "تذكير بالموعد",
     reminder1_msg: "تذكير بسيط: لديك موعد مع الدكتور الهادي بلحولة بعد 3 أيام.",
     reminder2_title: "موعد وشيك",
@@ -2157,15 +2183,14 @@ document.getElementById('patientHeroWrap').addEventListener('click', async (e)=>
   }
 });
 
-/* ---------------- reminder popup: rappel J-7 (stage 0), J-3 (stage 1), J-1/jour J (stage 2) ---------------- */
+/* ---------------- reminder popup: 1er rappel (J-3) et 2eme rappel (J-1 / jour J) ---------------- */
 function checkReminderPopup(a){
   if(!a) return;
   const diff = daysBetween(todayStr(), a.date);
   let stage = null;
-  if(diff === 7) stage = 0;
-  else if(diff === 3) stage = 1;
+  if(diff === 3) stage = 1;
   else if(diff === 1 || diff === 0) stage = 2;
-  if(stage === null) return;
+  if(!stage) return;
   const key = `reminderShown_${a.id}_${a.date}_stage${stage}`;
   if(localStorage.getItem(key)) return;
   showReminderPopup(a, stage, diff);
@@ -2175,11 +2200,7 @@ function showReminderPopup(a, stage, diff){
   const title = document.getElementById('reminderTitle');
   const msg = document.getElementById('reminderMsg');
   const badge = document.getElementById('reminderBadge');
-  if(stage===0){
-    title.textContent = t('reminder0_title');
-    msg.textContent = t('reminder0_msg');
-    badge.textContent = '1';
-  } else if(stage===1){
+  if(stage===1){
     title.textContent = t('reminder1_title');
     msg.textContent = t('reminder1_msg');
     badge.textContent = '1';

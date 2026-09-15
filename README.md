@@ -107,6 +107,143 @@ cd android
   Build > Generate Signed Bundle / APK, puis suis l'assistant pour créer ou
   utiliser un keystore.
 
+## Secret GitHub `FIREBASE_SERVICE_ACCOUNT`
+
+5 scripts dans `scripts/` utilisent le **Admin SDK** Firebase (accès complet,
+qui contourne `firestore.rules`) parce qu'ils tournent en dehors du
+navigateur, sur un cron GitHub Actions ou en local :
+
+| Script | Déclenché par | Rôle |
+|---|---|---|
+| `send-reminders.js` | `.github/workflows/send-reminders.yml` (quotidien) | Rappels push J-3/J-1/jour J |
+| `archive-old-appointments.js` | `.github/workflows/archive-old-appointments.yml` (quotidien) | Archive les RDV de +90 jours |
+| `notify-request-outcome.js` | `.github/workflows/notify-request-outcome.yml` (toutes les 10 min) | Notifie le patient d'une décision (annulation/décalage) |
+| `reset-patient-codes.js` | `.github/workflows/reset-patient-codes.yml` (toutes les 5 min) | Régénère le code patient sur demande |
+| `recompute-loyalty-streaks.js` | **Aucun** — à lancer manuellement en local | Resynchronise les séries de fidélité |
+
+Les 4 premiers ont besoin du secret configuré sur GitHub pour fonctionner en
+automatique ; le 5ème n'a pas de workflow et se lance à la main quand
+nécessaire.
+
+### 1. Générer la clé de compte de service
+
+1. [Console Firebase](https://console.firebase.google.com) → ton projet →
+   icône ⚙️ (roue crantée) → **Paramètres du projet**.
+2. Onglet **Comptes de service**.
+3. Clique **"Générer une nouvelle clé privée"** → confirme → un fichier
+   `.json` se télécharge (ex: `rdv-cabinet-belhoula-firebase-adminsdk-xxxxx.json`).
+
+⚠️ **Ne jamais committer ce fichier dans le dépôt** (il donne un accès total
+à la base de données, sans passer par les règles de sécurité). S'il traîne
+sur ton disque après l'étape suivante, ajoute-le à `.gitignore` ou
+supprime-le.
+
+### 2. L'ajouter comme secret GitHub
+
+1. Sur `https://github.com/Cbh3021/rdv-cabinet-app` → **Settings** → menu de
+   gauche **Secrets and variables** → **Actions**.
+2. Onglet **Secrets** → **New repository secret**.
+3. **Name** : `FIREBASE_SERVICE_ACCOUNT` (exactement, en majuscules).
+4. **Secret** : ouvre le fichier `.json` téléchargé, copie **tout son
+   contenu** (l'objet JSON complet, accolades comprises), colle-le dans le
+   champ.
+5. **Add secret**.
+
+Les 4 workflows planifiés lisent automatiquement ce secret via
+`${{ secrets.FIREBASE_SERVICE_ACCOUNT }}` — aucune autre configuration
+nécessaire, ils tourneront dès le prochain déclenchement planifié (ou en
+lançant manuellement via l'onglet **Actions** → workflow concerné → **Run
+workflow**).
+
+### 3. Lancer `recompute-loyalty-streaks.js` en local (pas de workflow)
+
+```powershell
+$env:FIREBASE_SERVICE_ACCOUNT = Get-Content -Raw "chemin\vers\service-account.json"
+node scripts/recompute-loyalty-streaks.js
+```
+
+### 4. Si la clé fuite (repo cloné publiquement avec le fichier dedans, etc.)
+
+1. Console Firebase → Paramètres du projet → Comptes de service → gère les
+   clés existantes (lien vers Google Cloud Console) → **supprime** la clé
+   compromise.
+2. Regénère-en une nouvelle (étape 1) et remplace la valeur du secret GitHub
+   (étape 2 — un secret existant s'écrase en le recréant avec le même nom).
+
+## App Check — protéger Firestore/Auth contre les accès hors appli
+
+### Pourquoi
+
+`firestore.rules` protège déjà les données par **identité** (un patient ne
+voit que ses propres RDV, seul un `admin` peut tout gérer). Mais rien
+n'empêche aujourd'hui un script extérieur d'utiliser la clé `apiKey` visible
+dans `src/main.js`/`www/app.js` (normal pour Firebase, elle n'est pas
+secrète) pour taper directement l'API Firebase depuis un simple script
+Node — par exemple pour créer des comptes en masse, ou tenter de deviner en
+boucle le code à 6 chiffres d'un patient (`brute-force`).
+
+**App Check** ajoute une seconde vérification : Firebase refuse toute
+requête qui ne prouve pas venir de l'appli légitime (le vrai `index.html`
+servi par ton domaine, ou le vrai APK signé) — même avec une `apiKey`
+valide.
+
+### État actuel dans ce dépôt
+
+- **Web** : code déjà en place dans `src/main.js` (reCAPTCHA v3), **inactif
+  par défaut**. Pour l'activer, remplace `APP_CHECK_SITE_KEY` (juste après
+  `firebaseConfig`) par ta vraie clé — voir étapes ci-dessous.
+- **Android/APK** : **pas encore implémenté** dans ce dépôt. Nécessite le
+  plugin `@capacitor-firebase/app-check` (Play Integrity) — voir "Étape
+  suivante" plus bas si tu veux l'ajouter.
+
+### Configuration (web)
+
+1. Console Firebase → menu de gauche **App Check**.
+2. Onglet **Apps** → sélectionne ton application Web (celle ajoutée à
+   l'étape 6 de "Avant de compiler") → **reCAPTCHA v3** comme fournisseur.
+3. Si demandé, crée une clé reCAPTCHA v3 sur
+   [google.com/recaptcha/admin](https://www.google.com/recaptcha/admin) —
+   ajoute le domaine où l'appli web sera servie (ou `localhost` pour tester).
+4. Copie la **clé de site** (site key) obtenue → colle-la dans
+   `src/main.js`, constante `APP_CHECK_SITE_KEY`.
+5. Recompile : `npx esbuild src/main.js --bundle --minify --format=iife --platform=browser --outfile=www/app.js`
+
+### ⚠️ Ordre obligatoire pour ne pas casser l'appli : Monitor avant Enforced
+
+Dans Console Firebase → App Check → onglet **APIs**, pour **Firestore** et
+**Authentication**, deux modes existent :
+
+- **Monitor (non appliqué)** : App Check observe et remonte des métriques,
+  mais **laisse passer toutes les requêtes**, même sans token valide.
+- **Enforced (appliqué)** : **bloque** toute requête sans token App Check
+  valide.
+
+**Reste en mode Monitor plusieurs jours après avoir déployé le code
+ci-dessus**, et vérifie dans le tableau de bord App Check que le
+pourcentage de requêtes "vérifiées" grimpe vers 100 % (ça couvre le temps
+que tous les patients/le médecin rouvrent l'appli avec le nouveau code).
+**Ne passe en Enforced que quand ce pourcentage est proche de 100 %** —
+sinon, tu bloques instantanément tout le monde, y compris le médecin, tant
+que l'APK n'a pas été recompilé et réinstallé avec le support Android
+(non fait dans ce dépôt, voir ci-dessous).
+
+### Étape suivante (non faite ici) : Android/Play Integrity
+
+Pour protéger aussi l'APK (pas seulement un usage web), il faudrait :
+1. `npm install @capacitor-firebase/app-check` puis `npx cap sync android`.
+2. Suivre la config native Android du plugin (réutilise normalement les
+   mêmes empreintes SHA-1/SHA-256 déjà ajoutées pour Firebase — voir section
+   "IMPORTANT — authentification par SMS dans l'APK" plus haut) :
+   [capawesome.io/docs/plugins/firebase/app-check](https://capawesome.io/docs/plugins/firebase/app-check/)
+3. Activer Play Integrity API dans Google Cloud Console (probablement déjà
+   fait si le SMS natif est configuré).
+4. Adapter l'initialisation dans `src/main.js` pour appeler ce plugin natif
+   quand `isNative` est vrai (au lieu du `ReCaptchaV3Provider` web).
+
+Tant que ce n'est pas fait, **ne passe jamais Firestore/Auth en mode
+Enforced tant que l'app tourne aussi en APK** — sinon l'APK (qui n'envoie
+aucun token App Check) sera bloqué en totalité.
+
 ## Sécurité avant usage réel avec de vraies données patients
 
 Le projet Firestore doit être configuré avec de vraies règles de sécurité
