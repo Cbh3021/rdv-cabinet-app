@@ -17,6 +17,7 @@
      FIREBASE_SERVICE_ACCOUNT="$(cat service-account.json)" node scripts/send-reminders.js
    ======================================================================= */
 const admin = require("firebase-admin");
+const { maskPhone } = require("./utils");
 
 const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
 if (!raw) {
@@ -26,9 +27,8 @@ if (!raw) {
 admin.initializeApp({ credential: admin.credential.cert(JSON.parse(raw)) });
 const db = admin.firestore();
 
-// Aligné sur checkReminderPopup() côté client : J-7 = stage 0, J-3 = stage 1, J-1/jour J = stage 2.
+// Aligné sur checkReminderPopup() côté client : J-3 = stage 1, J-1/jour J = stage 2.
 const REMINDER_STAGES = [
-  { offsetDays: 7, stage: 0 },
   { offsetDays: 3, stage: 1 },
   { offsetDays: 1, stage: 2 },
   { offsetDays: 0, stage: 2 },
@@ -43,12 +43,10 @@ function dateKeyInTunis(offsetDays) {
 
 const MESSAGES = {
   fr: {
-    0: (t) => `Rappel : rendez-vous avec Dr Hédi Belhoula dans une semaine, le ${t}.`,
     1: (t) => `Petit rappel : rendez-vous avec Dr Hédi Belhoula le ${t}.`,
     2: (t) => `Rendez-vous imminent avec Dr Hédi Belhoula : ${t}.`,
   },
   ar: {
-    0: (t) => `تذكير: لديك موعد مع الدكتور الهادي بلحولة بعد أسبوع، يوم ${t}.`,
     1: (t) => `تذكير: لديك موعد مع الدكتور الهادي بلحولة يوم ${t}.`,
     2: (t) => `موعدك مع الدكتور الهادي بلحولة قريب جداً: ${t}.`,
   },
@@ -85,9 +83,9 @@ async function sendOneReminder(apptDoc, stage) {
         data: { apptId: apptDoc.id },
       });
       delivered = true;
-      console.log(`Push envoyé → ${appt.phone} (stage ${stage})`);
+      console.log(`Push envoyé → ${maskPhone(appt.phone)} (stage ${stage})`);
     } catch (e) {
-      console.error(`Push échoué pour ${appt.phone}: ${e.message}`);
+      console.error(`Push échoué pour ${maskPhone(appt.phone)}: ${e.message}`);
       if (e.code === "messaging/registration-token-not-registered") {
         await contactRef.update({ fcmToken: admin.firestore.FieldValue.delete() }).catch(() => {});
       }
@@ -99,7 +97,7 @@ async function sendOneReminder(apptDoc, stage) {
     // remplace un vrai envoi SMS (les API SMS sont payantes). On se contente
     // de logger — le popup interne (app.js) prendra le relais si le patient
     // ouvre l'appli ce jour-là.
-    console.log(`Pas de push pour ${appt.phone} — RDV du ${appt.date} (notifications non activées).`);
+    console.log(`Pas de push pour ${maskPhone(appt.phone)} — RDV du ${appt.date} (notifications non activées).`);
   }
 
   await apptDoc.ref.update({ [`remindersSent.${sentField}`]: true });

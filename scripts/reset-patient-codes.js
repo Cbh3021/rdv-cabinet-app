@@ -20,6 +20,7 @@
       mécanisme que pour un compte fraîchement créé.
    ======================================================================= */
 const admin = require("firebase-admin");
+const { maskPhone } = require("./utils");
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
@@ -64,9 +65,9 @@ async function main() {
         },
         { merge: true }
       );
-      console.log(`✅ Code réinitialisé pour ${phone}`);
+      console.log(`✅ Code réinitialisé pour ${maskPhone(phone)}`);
     } catch (e) {
-      console.error(`❌ Échec réinitialisation pour ${phone} :`, e.message);
+      console.error(`❌ Échec réinitialisation pour ${maskPhone(phone)} :`, e.message);
       await docSnap.ref.set(
         {
           resetStatus: "error",

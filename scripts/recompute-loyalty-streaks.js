@@ -16,6 +16,7 @@
      FIREBASE_SERVICE_ACCOUNT="$(cat service-account.json)" node scripts/recompute-loyalty-streaks.js
    ======================================================================= */
 const admin = require("firebase-admin");
+const { maskPhone } = require("./utils");
 
 const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
 if (!raw) {
@@ -62,7 +63,7 @@ async function run() {
       { merge: true }
     );
     updated += 1;
-    console.log(`${phone} -> chaîne actuelle ${currentStreak}, record ${longestStreak}`);
+    console.log(`${maskPhone(phone)} -> chaîne actuelle ${currentStreak}, record ${longestStreak}`);
   }
 
   console.log(`Terminé : ${updated} patient(s) resynchronisé(s).`);

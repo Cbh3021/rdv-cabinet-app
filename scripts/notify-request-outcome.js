@@ -11,6 +11,7 @@
      FIREBASE_SERVICE_ACCOUNT="$(cat service-account.json)" node scripts/notify-request-outcome.js
    ======================================================================= */
 const admin = require("firebase-admin");
+const { maskPhone } = require("./utils");
 
 const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
 if (!raw) {
@@ -65,15 +66,15 @@ async function run() {
           token: contact.fcmToken,
           notification: { title, body },
         });
-        console.log(`Push envoyé → ${docSnap.id}`);
+        console.log(`Push envoyé → ${maskPhone(docSnap.id)}`);
       } catch (e) {
-        console.error(`Push échoué pour ${docSnap.id}: ${e.message}`);
+        console.error(`Push échoué pour ${maskPhone(docSnap.id)}: ${e.message}`);
         if (e.code === "messaging/registration-token-not-registered") {
           await docSnap.ref.update({ fcmToken: admin.firestore.FieldValue.delete() }).catch(() => {});
         }
       }
     } else {
-      console.log(`Pas de push pour ${docSnap.id} (notifications non activées) — la bannière dans l'appli prendra le relais à l'ouverture.`);
+      console.log(`Pas de push pour ${maskPhone(docSnap.id)} (notifications non activées) — la bannière dans l'appli prendra le relais à l'ouverture.`);
     }
 
     // Marqué comme traité dans tous les cas : la bannière temps réel dans
