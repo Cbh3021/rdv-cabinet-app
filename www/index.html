@@ -28,7 +28,7 @@
     --cream:#FFF8F0; --coral:#FF7B54; --amber:#FFB26B; --ink:#2D3142;
     --teal:#3FA9A2; --alert:#E0533D; --card:#FFFFFF;
     --line: rgba(45,49,66,0.10); --shadow: 0 10px 30px rgba(45,49,66,0.08);
-    --muted:var(--muted); --muted2:var(--muted2); --btn2:#F0E9DD; --btn2-hover:#e6ddcc;
+    --muted:#6B7080; --muted2:#8A8FA3; --btn2:#F0E9DD; --btn2-hover:#e6ddcc;
   }
   html[data-theme="dark"]{
     --cream:#1B1D27; --card:#262837; --ink:#F0EEE9;
@@ -43,6 +43,7 @@
   html{color-scheme:light;}
   html[data-theme="dark"]{color-scheme:dark;}
   body{margin:0;background:var(--cream);color:var(--ink);font-family:'Manrope',sans-serif;-webkit-font-smoothing:antialiased;transition:background .15s,color .15s;}
+  body,body *{transition:background-color .15s,border-color .15s,color .15s,box-shadow .15s;}
   h1,h2,h3,.display{font-family:'Fraunces',serif;}
 
   #configBanner{display:none;background:var(--alert);color:#fff;padding:12px 18px;font-size:13px;text-align:center;font-weight:600;}
