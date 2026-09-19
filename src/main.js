@@ -342,6 +342,7 @@ const TRANSLATIONS = {
     reminder_ok: "Compris",
     respect_date_note: "Prière de respecter la date du RDV indiqué.",
     archived_rdv: "RDV archivés",
+    today_badge: "Aujourd'hui",
     phone_label: "N° Tél",
     footer_address: "Route de Tunis km9, Cité El Ons",
     greeting_morning: "Bonjour", greeting_evening: "Bonsoir",
@@ -406,6 +407,7 @@ const TRANSLATIONS = {
     reminder_ok: "فهمت",
     respect_date_note: "يرجى احترام تاريخ الموعد المحدد.",
     archived_rdv: "المواعيد المؤرشفة",
+    today_badge: "اليوم",
     phone_label: "الهاتف",
     footer_address: "طريق تونس، كم 9، حي الأنس",
     greeting_morning: "صباح الخير", greeting_evening: "مساء الخير",
@@ -1004,7 +1006,7 @@ function rdvCardHtml(a, loyaltyShown){
       }
     }
   }
-  return `<div class="rdv-card">
+  return `<div class="rdv-card${st.key==='today'?' rdv-card-today':''}">
       <div class="rdv-row">
         <div class="rdv-time">${a.time}</div>
         <div class="rdv-info">
@@ -1253,7 +1255,8 @@ function renderAdmin(){
   } else {
     upcoming.forEach(a=>{
       if(a.date!==lastDate){
-        html += `<div class="day-heading">${fmtDate(a.date)}</div>`;
+        const isToday = statusOf(a).key==='today';
+        html += `<div class="day-heading${isToday?' day-heading-today':''}">${fmtDate(a.date)}${isToday?` <span class="today-pill">${t('today_badge')}</span>`:''}</div>`;
         lastDate=a.date;
       }
       html += rdvCardHtml(a, loyaltyShown);
