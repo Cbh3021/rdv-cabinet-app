@@ -43,6 +43,18 @@
   html{color-scheme:light;}
   html[data-theme="dark"]{color-scheme:dark;}
   body{margin:0;background:var(--cream);color:var(--ink);font-family:'Manrope',sans-serif;-webkit-font-smoothing:antialiased;transition:background .15s,color .15s;}
+  /* Synchronise la transition de thème sur le contenu principal (cartes,
+     boutons, champs) pour éviter que seul le fond de body glisse en
+     douceur pendant que le reste bascule d'un coup (effet de
+     scintillement au changement de thème). PAS de box-shadow ici : ça
+     entre en conflit avec l'animation du halo de l'écran de connexion
+     (#roleGate .gate-mark, qui anime justement son box-shadow) et casse
+     son rendu en carré au lieu du glow circulaire — cause du bug retiré
+     le 16/09. #roleGate est donc explicitement exclu ci-dessous. */
+  main,.modal,.overlay,.rdv-card,.day-heading,header,button,input,select,textarea,
+  .field-hint,.status-pill,.dropdown-menu,.toolbar-row2{
+    transition:background-color .15s ease,color .15s ease,border-color .15s ease;}
+  #roleGate,#roleGate *{transition:none !important;}
   h1,h2,h3,.display{font-family:'Fraunces',serif;}
 
   #configBanner{display:none;background:var(--alert);color:#fff;padding:12px 18px;font-size:13px;text-align:center;font-weight:600;}
@@ -149,9 +161,13 @@
 
   .rdv-list{display:flex;flex-direction:column;gap:12px;}
   .day-heading{font-size:12.5px;font-weight:800;color:var(--muted2);text-transform:uppercase;letter-spacing:.04em;
-    margin:18px 0 8px;}
+    margin:18px 0 8px;display:flex;align-items:center;gap:8px;}
+  .day-heading-today{color:var(--coral);}
+  .today-pill{display:inline-block;background:var(--coral);color:#fff;font-size:10.5px;font-weight:800;
+    letter-spacing:.03em;padding:2px 8px;border-radius:8px;text-transform:uppercase;}
   .rdv-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;
     display:flex;flex-direction:column;align-items:stretch;gap:0;box-shadow:var(--shadow);transition:box-shadow .15s;}
+  .rdv-card-today{border-left:3px solid var(--coral);}
   .rdv-card:hover{box-shadow:0 14px 34px rgba(45,49,66,0.12);}
   .rdv-row{display:flex;align-items:center;gap:12px;}
   .rdv-time{font-family:'Fraunces';font-weight:700;font-size:18px;min-width:52px;text-align:center;}
