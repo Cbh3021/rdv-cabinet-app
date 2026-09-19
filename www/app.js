@@ -41107,6 +41107,7 @@ This typically indicates that your device does not have a healthy Internet conne
       reminder_ok: "Compris",
       respect_date_note: "Pri\xE8re de respecter la date du RDV indiqu\xE9.",
       archived_rdv: "RDV archiv\xE9s",
+      today_badge: "Aujourd'hui",
       phone_label: "N\xB0 T\xE9l",
       footer_address: "Route de Tunis km9, Cit\xE9 El Ons",
       greeting_morning: "Bonjour",
@@ -41196,6 +41197,7 @@ This typically indicates that your device does not have a healthy Internet conne
       reminder_ok: "\u0641\u0647\u0645\u062A",
       respect_date_note: "\u064A\u0631\u062C\u0649 \u0627\u062D\u062A\u0631\u0627\u0645 \u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0645\u0648\u0639\u062F \u0627\u0644\u0645\u062D\u062F\u062F.",
       archived_rdv: "\u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0627\u0644\u0645\u0624\u0631\u0634\u0641\u0629",
+      today_badge: "\u0627\u0644\u064A\u0648\u0645",
       phone_label: "\u0627\u0644\u0647\u0627\u062A\u0641",
       footer_address: "\u0637\u0631\u064A\u0642 \u062A\u0648\u0646\u0633\u060C \u0643\u0645 9\u060C \u062D\u064A \u0627\u0644\u0623\u0646\u0633",
       greeting_morning: "\u0635\u0628\u0627\u062D \u0627\u0644\u062E\u064A\u0631",
@@ -41357,50 +41359,47 @@ This typically indicates that your device does not have a healthy Internet conne
   });
   document.getElementById("chooseAdmin").addEventListener("click", () => enterRole("admin"));
   document.getElementById("chooseAdminPatient").addEventListener("click", () => enterRole("patient"));
-  document.getElementById("switchRoleBtn").addEventListener("click", async () => {
+  function withTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise((resolve2) => setTimeout(resolve2, ms))
+    ]);
+  }
+  async function performSignOut(btn) {
+    if (btn) {
+      btn.disabled = true;
+      btn.dataset.prevText = btn.textContent;
+      btn.textContent = "\u2026";
+    }
     if (isConfigured) {
       if (isNative) {
-        try {
-          await FirebaseAuthentication.signOut();
-        } catch (e2) {
-        }
+        await withTimeout(FirebaseAuthentication.signOut().catch(() => {
+        }), 4e3);
       }
-      try {
-        if (auth.currentUser) {
-          await signOut(auth);
-        }
-      } catch (e2) {
+      if (auth.currentUser) {
+        await withTimeout(signOut(auth).catch(() => {
+        }), 4e3);
       }
     }
     teardownView();
     role = null;
     document.getElementById("appShell").style.display = "none";
     document.getElementById("roleGate").style.display = "flex";
-  });
-  document.getElementById("signOutBtn").addEventListener("click", async () => {
-    if (isConfigured) {
-      if (isNative) {
-        try {
-          await FirebaseAuthentication.signOut();
-        } catch (e2) {
-        }
-      }
-      try {
-        if (auth.currentUser) {
-          await signOut(auth);
-        }
-      } catch (e2) {
-      }
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = btn.dataset.prevText || btn.textContent;
     }
-    teardownView();
-    role = null;
-    document.getElementById("appShell").style.display = "none";
-    document.getElementById("roleGate").style.display = "flex";
-  });
+  }
+  document.getElementById("switchRoleBtn").addEventListener("click", (e2) => performSignOut(e2.currentTarget));
+  document.getElementById("signOutBtn").addEventListener("click", (e2) => performSignOut(e2.currentTarget));
   function teardownView() {
     if (unsubscribeAppts) {
       unsubscribeAppts();
       unsubscribeAppts = null;
+    }
+    if (unsubscribeContacts) {
+      unsubscribeContacts();
+      unsubscribeContacts = null;
     }
     patientPhoneE164 = null;
     appointments = [];
@@ -41784,7 +41783,7 @@ This typically indicates that your device does not have a healthy Internet conne
         }
       }
     }
-    return `<div class="rdv-card">
+    return `<div class="rdv-card${st2.key === "today" ? " rdv-card-today" : ""}">
       <div class="rdv-row">
         <div class="rdv-time">${a.time}</div>
         <div class="rdv-info">
@@ -41989,7 +41988,8 @@ This typically indicates that your device does not have a healthy Internet conne
     } else {
       upcoming.forEach((a) => {
         if (a.date !== lastDate) {
-          html += `<div class="day-heading">${fmtDate(a.date)}</div>`;
+          const isToday = statusOf(a).key === "today";
+          html += `<div class="day-heading${isToday ? " day-heading-today" : ""}">${fmtDate(a.date)}${isToday ? ` <span class="today-pill">${t2("today_badge")}</span>` : ""}</div>`;
           lastDate = a.date;
         }
         html += rdvCardHtml(a, loyaltyShown);

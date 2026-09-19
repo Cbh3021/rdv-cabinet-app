@@ -91,6 +91,24 @@
   html{color-scheme:light;}
   html[data-theme="dark"]{color-scheme:dark;}
   body{margin:0;background:var(--cream);color:var(--ink);font-family:'Manrope',sans-serif;-webkit-font-smoothing:antialiased;transition:background .15s,color .15s;}
+  /* Synchronise la transition de thème sur le contenu principal (cartes,
+     boutons, champs) pour éviter que seul le fond de body glisse en
+     douceur pendant que le reste bascule d'un coup (effet de
+     scintillement/saccade au changement de thème). box-shadow est inclus
+     ici : le seul élément qui y était sensible est .gate-mark (son animation
+     d'entrée anime déjà son box-shadow ; lui superposer une transition CSS
+     casse son rendu en carré au lieu du glow circulaire), donc lui seul est
+     exclu individuellement ci-dessous — inutile d'exclure tout #roleGate,
+     ce qui désynchroniserait au passage tout l'écran de connexion (cartes de
+     rôle, titre, bouton thème) du fond de la page. .role-card, .rdv-card et
+     .dropdown-menu ont leur propre règle "transition" plus bas (raccourci
+     CSS qui réinitialise tout) : ils sont donc volontairement absents de la
+     liste ci-dessous et gèrent eux-mêmes les 4 propriétés pour ne pas se la
+     faire écraser silencieusement. */
+  main,.modal,.overlay,.day-heading,header,button,input,select,textarea,
+  .field-hint,.status-pill,.toolbar-row2,.patient-hero{
+    transition:background-color .15s ease,color .15s ease,border-color .15s ease,box-shadow .15s ease;}
+  .gate-mark{transition:none !important;}
   h1,h2,h3,.display{font-family:'Fraunces',serif;}
 
   #configBanner{display:none;background:var(--alert);color:#fff;padding:12px 18px;font-size:13px;text-align:center;font-weight:600;}
@@ -105,7 +123,8 @@
   #roleGate p{color:var(--muted);margin:0 0 30px;font-size:14px;}
   .role-choices{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;}
   .role-card{width:180px;padding:26px 18px;border-radius:20px;background:var(--card);border:1px solid var(--line);
-    box-shadow:var(--shadow);cursor:pointer;transition:.2s;}
+    box-shadow:var(--shadow);cursor:pointer;
+    transition:transform .2s ease,background-color .15s ease,color .15s ease,border-color .15s ease,box-shadow .15s ease;}
   .role-card:hover{transform:translateY(-3px);border-color:var(--coral);}
   .role-card .emoji{font-size:30px;margin-bottom:10px;}
   .role-card .label{font-weight:700;font-size:15px;}
@@ -133,7 +152,8 @@
   .dropdown{position:relative;display:inline-flex;}
   .dropdown-menu{position:absolute;top:calc(100% + 8px);right:0;background:#2D3142 !important;border:1px solid rgba(255,255,255,0.12);
     border-radius:14px;box-shadow:0 16px 36px rgba(45,49,66,0.16);min-width:200px;padding:6px;z-index:60;
-    opacity:0;transform:translateY(-4px) scale(.98);pointer-events:none;transition:.14s ease;}
+    opacity:0;transform:translateY(-4px) scale(.98);pointer-events:none;
+    transition:opacity .14s ease,transform .14s ease,background-color .15s ease,color .15s ease,border-color .15s ease;}
   .dropdown-menu.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
   .dropdown-item{display:flex;align-items:center;gap:9px;width:100%;padding:10px 11px;border:none;background:none;
     border-radius:9px;font-family:'Manrope';font-size:13.5px;font-weight:700;color:#fff !important;cursor:pointer;
@@ -162,7 +182,8 @@
   .day-heading{font-size:12.5px;font-weight:800;color:var(--muted2);text-transform:uppercase;letter-spacing:.04em;
     margin:18px 0 8px;}
   .rdv-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;
-    display:flex;flex-direction:column;align-items:stretch;gap:0;box-shadow:var(--shadow);transition:box-shadow .15s;}
+    display:flex;flex-direction:column;align-items:stretch;gap:0;box-shadow:var(--shadow);
+    transition:background-color .15s ease,color .15s ease,border-color .15s ease,box-shadow .15s ease;}
   .rdv-card:hover{box-shadow:0 14px 34px rgba(45,49,66,0.12);}
   .rdv-row{display:flex;align-items:center;gap:12px;}
   .rdv-time{font-family:'Fraunces';font-weight:700;font-size:18px;min-width:52px;text-align:center;}

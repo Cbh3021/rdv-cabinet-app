@@ -342,6 +342,7 @@ const TRANSLATIONS = {
     reminder_ok: "Compris",
     respect_date_note: "Prière de respecter la date du RDV indiqué.",
     archived_rdv: "RDV archivés",
+    today_badge: "Aujourd'hui",
     phone_label: "N° Tél",
     footer_address: "Route de Tunis km9, Cité El Ons",
     greeting_morning: "Bonjour", greeting_evening: "Bonsoir",
@@ -406,6 +407,7 @@ const TRANSLATIONS = {
     reminder_ok: "فهمت",
     respect_date_note: "يرجى احترام تاريخ الموعد المحدد.",
     archived_rdv: "المواعيد المؤرشفة",
+    today_badge: "اليوم",
     phone_label: "الهاتف",
     footer_address: "طريق تونس، كم 9، حي الأنس",
     greeting_morning: "صباح الخير", greeting_evening: "مساء الخير",
@@ -568,29 +570,41 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeAllDropdow
 /* ---------------- role gate ---------------- */
 document.getElementById('chooseAdmin').addEventListener('click', ()=>enterRole('admin'));
 document.getElementById('chooseAdminPatient').addEventListener('click', ()=>enterRole('patient'));
-document.getElementById('switchRoleBtn').addEventListener('click', async ()=>{
+
+// Utilitaire : borne dans le temps une promesse qui peut ne jamais se
+// terminer (pont natif Capacitor coupé, réseau capricieux...). Sans ça,
+// un `await` sur un appel natif qui ne répond jamais bloque tout le reste
+// du gestionnaire de clic pour toujours — c'est ce qui faisait "coincer"
+// le bouton déconnexion côté médecin (uniquement visible côté app Android,
+// puisque isNative est faux dans un navigateur classique).
+function withTimeout(promise, ms){
+  return Promise.race([
+    promise,
+    new Promise(resolve => setTimeout(resolve, ms))
+  ]);
+}
+
+async function performSignOut(btn){
+  if(btn){ btn.disabled = true; btn.dataset.prevText = btn.textContent; btn.textContent = '…'; }
   if(isConfigured){
-    if(isNative){ try{ await FirebaseAuthentication.signOut(); }catch(e){} }
-    try{ if(auth.currentUser){ await signOut(auth); } }catch(e){}
+    if(isNative){ await withTimeout(FirebaseAuthentication.signOut().catch(()=>{}), 4000); }
+    if(auth.currentUser){ await withTimeout(signOut(auth).catch(()=>{}), 4000); }
   }
+  // Le nettoyage local se fait toujours, même si Firebase n'a pas répondu
+  // à temps : la session locale doit se fermer quoi qu'il arrive, quitte à
+  // ce que le jeton distant expire de son côté.
   teardownView();
   role=null;
   document.getElementById('appShell').style.display='none';
   document.getElementById('roleGate').style.display='flex';
-});
-document.getElementById('signOutBtn').addEventListener('click', async ()=>{
-  if(isConfigured){
-    if(isNative){ try{ await FirebaseAuthentication.signOut(); }catch(e){} }
-    try{ if(auth.currentUser){ await signOut(auth); } }catch(e){}
-  }
-  teardownView();
-  role=null;
-  document.getElementById('appShell').style.display='none';
-  document.getElementById('roleGate').style.display='flex';
-});
+  if(btn){ btn.disabled = false; btn.textContent = btn.dataset.prevText || btn.textContent; }
+}
+document.getElementById('switchRoleBtn').addEventListener('click', (e)=>performSignOut(e.currentTarget));
+document.getElementById('signOutBtn').addEventListener('click', (e)=>performSignOut(e.currentTarget));
 
 function teardownView(){
   if(unsubscribeAppts){ unsubscribeAppts(); unsubscribeAppts=null; }
+  if(unsubscribeContacts){ unsubscribeContacts(); unsubscribeContacts=null; }
   patientPhoneE164=null;
   appointments=[];
 }
@@ -1004,7 +1018,7 @@ function rdvCardHtml(a, loyaltyShown){
       }
     }
   }
-  return `<div class="rdv-card">
+  return `<div class="rdv-card${st.key==='today'?' rdv-card-today':''}">
       <div class="rdv-row">
         <div class="rdv-time">${a.time}</div>
         <div class="rdv-info">
@@ -1253,7 +1267,8 @@ function renderAdmin(){
   } else {
     upcoming.forEach(a=>{
       if(a.date!==lastDate){
-        html += `<div class="day-heading">${fmtDate(a.date)}</div>`;
+        const isToday = statusOf(a).key==='today';
+        html += `<div class="day-heading${isToday?' day-heading-today':''}">${fmtDate(a.date)}${isToday?` <span class="today-pill">${t('today_badge')}</span>`:''}</div>`;
         lastDate=a.date;
       }
       html += rdvCardHtml(a, loyaltyShown);
