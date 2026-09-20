@@ -50,7 +50,7 @@ service cloud.firestore {
 
     function isValidAppointment() {
       return request.resource.data.keys().hasOnly(
-               ['name','phone','date','time','reason','notes','deleted','deletedAt','patientRequest','seriesId','honored','recurrenceInterval','remindersSent']
+               ['name','phone','date','time','reason','notes','deleted','deletedAt','patientRequest','seriesId','honored','statsCounted','recurrenceInterval','remindersSent']
              )
              && request.resource.data.name is string
              && request.resource.data.name.size() > 0

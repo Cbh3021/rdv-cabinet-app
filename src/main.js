@@ -841,7 +841,10 @@ async function editAppointment(id, data){
   if(before && data.date && data.time && (data.date!==before.date || data.time!==before.time)){
     await recordReschedule(before.phone, before.date, before.time);
   }
-  if(isConfigured) await updateDoc(doc(db,"appointments",id), data);
+  if(isConfigured){
+    try{ await updateDoc(doc(db,"appointments",id), data); }
+    catch(e){ console.error("Erreur modification RDV", e); alert("Impossible d'enregistrer les modifications. Réessaie."); }
+  }
   else { Object.assign(appointments.find(x=>x.id===id), data); renderAdmin(); }
 }
 async function removeAppointment(id, trackCancellation=true){
@@ -855,7 +858,10 @@ async function removeAppointment(id, trackCancellation=true){
   // volontairement lors d'une suppression de compte patient en masse
   // (trackCancellation=false) : ce n'est pas une vraie annulation.
   if(trackCancellation && a && !a.deleted) await recordCancellation(a.phone, a.date, a.time);
-  if(isConfigured) await updateDoc(doc(db,"appointments",id), {deleted:true, deletedAt:new Date().toISOString()});
+  if(isConfigured){
+    try{ await updateDoc(doc(db,"appointments",id), {deleted:true, deletedAt:new Date().toISOString()}); }
+    catch(e){ console.error("Erreur suppression RDV", e); alert("Impossible de supprimer ce RDV. Réessaie."); }
+  }
   else { if(a){ a.deleted=true; a.deletedAt=new Date().toISOString(); renderAdmin(); } }
 }
 async function restoreAppointment(id){
@@ -948,7 +954,8 @@ async function setHonoredStatus(id, value){
         if(cur > longest) await setDoc(doc(db,"patients", a.phone), {longestStreak: cur}, {merge:true});
       }
     }catch(e){ console.error("Erreur mise à jour stats fidélité", e); }
-    await updateDoc(doc(db,"appointments",id), {honored:value, statsCounted: value!==null});
+    try{ await updateDoc(doc(db,"appointments",id), {honored:value, statsCounted: value!==null}); }
+    catch(e){ console.error("Erreur marquage honoré/non présenté", e); alert("Impossible d'enregistrer ce statut. Réessaie."); }
   }
   else if(a){ a.honored=value; renderAdmin(); }
 }
