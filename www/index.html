@@ -23,6 +23,74 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+// Bascule de thème en fondu, fiable sur tous les WebView.
+// Principe : un voile plein écran (couleur de fond du NOUVEAU thème) apparaît en
+// fondu — animation d'opacité gérée par le GPU, donc fluide même si le
+// thread principal est chargé. Une fois le voile opaque, on bascule vraiment
+// le thème dessous (le gros repaint des cartes est invisible), puis le voile
+// se dissipe. Le clic est rejoué vers app.js : toggleTheme() reste l'unique
+// source de vérité (variable `theme`, localStorage, icône du bouton).
+// Si quoi que ce soit échoue, on bascule quand même (sans fondu) : jamais bloqué.
+(function(){
+  var busy = false, replay = false;
+  var BG = { dark:'#1B1D27', light:'#FFF8F0' }; // = --cream de chaque thème
+  var root = document.documentElement;
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  document.addEventListener('click', function(e){
+    var btn = e.target && e.target.closest ? e.target.closest('#themeToggleBtn,#themeBtnGate') : null;
+    if(!btn || replay) return;               // clic rejoué : laisse passer vers app.js
+    e.stopPropagation(); e.preventDefault();
+    if(busy) return;
+    busy = true;
+
+    var veil = null, finished = false;
+    function cleanup(){
+      if(finished) return; finished = true;
+      if(veil && veil.parentNode) veil.parentNode.removeChild(veil);
+      root.classList.remove('theme-switching');
+      busy = false;
+    }
+    function toggleNow(){
+      root.classList.add('theme-switching');
+      replay = true;
+      try{ btn.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window})); } finally { replay = false; }
+    }
+
+    try{
+      if(reduce){ toggleNow(); setTimeout(cleanup, 100); return; }
+
+      var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      veil = document.createElement('div');
+      veil.setAttribute('aria-hidden','true');
+      veil.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483647;'
+        + 'opacity:0;will-change:opacity;transition:opacity .16s ease-out;background:' + BG[next];
+      document.body.appendChild(veil);
+      void veil.offsetWidth;                  // force le point de départ de l'animation
+      veil.style.opacity = '1';
+
+      var swapped = false;
+      function swapAndReveal(){
+        if(swapped) return; swapped = true;
+        try{ toggleNow(); }catch(err){}
+        // laisse 2 frames au navigateur pour peindre le nouveau thème sous le voile
+        requestAnimationFrame(function(){ requestAnimationFrame(function(){
+          veil.style.transition = 'opacity .22s ease-in';
+          veil.style.opacity = '0';
+          setTimeout(cleanup, 320);
+        }); });
+      }
+      veil.addEventListener('transitionend', swapAndReveal);
+      setTimeout(swapAndReveal, 260);          // filet : si transitionend ne vient pas
+      setTimeout(cleanup, 1200);               // filet ultime : jamais de voile coincé
+    }catch(err){
+      if(!veil){ try{ toggleNow(); }catch(e2){} }
+      cleanup();
+    }
+  }, true);
+})();
+</script>
 <style>
   :root{
     --cream:#FFF8F0; --coral:#FF7B54; --amber:#FFB26B; --ink:#2D3142;
@@ -61,6 +129,11 @@
   .field-hint,.status-pill,.toolbar-row2,.patient-hero{
     transition:background-color .15s ease,color .15s ease,border-color .15s ease,box-shadow .15s ease;}
   .gate-mark{transition:none !important;}
+  /* Pendant le basculement de thème (classe posée par le script ci-dessus) :
+     aucune transition CSS, pour qu'un seul repaint ait lieu (caché sous le
+     voile) au lieu de dizaines de transitions de box-shadow en parallèle. */
+  html.theme-switching *, html.theme-switching *::before, html.theme-switching *::after{
+    transition:none !important;}
   h1,h2,h3,.display{font-family:'Fraunces',serif;}
 
   #configBanner{display:none;background:var(--alert);color:#fff;padding:12px 18px;font-size:13px;text-align:center;font-weight:600;}
