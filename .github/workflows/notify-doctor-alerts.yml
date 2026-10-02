@@ -1,0 +1,19 @@
+name: Alertes médecin (nouveau RDV / demandes patients)
+on:
+  schedule:
+    - cron: '*/10 6-19 * * *'   # toutes les 10 min, 07h-20h heure de Tunis
+  workflow_dispatch:
+concurrency:
+  group: doctor-alerts
+  cancel-in-progress: false
+jobs:
+  alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install firebase-admin --no-save
+      - run: node scripts/notify-doctor-alerts.js
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

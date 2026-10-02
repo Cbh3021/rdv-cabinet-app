@@ -1,0 +1,16 @@
+name: Récap RDV du jour (médecin)
+on:
+  schedule:
+    - cron: '30 6 * * *'   # 06:30 UTC = 07:30 heure de Tunis (UTC+1 toute l'année)
+  workflow_dispatch:
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install firebase-admin --no-save
+      - run: node scripts/send-doctor-digest.js
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

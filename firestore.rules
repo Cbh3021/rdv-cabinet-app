@@ -101,9 +101,13 @@ service cloud.firestore {
 
     // liste des comptes médecin autorisés — un document par uid admin,
     // créé manuellement dans la console Firebase (jamais via l'appli)
+    // Le médecin peut uniquement gérer la liste de SES tokens push
+    // (fcmTokens / fcmUpdatedAt) — rien d'autre.
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
-      allow write: if false;
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens', 'fcmUpdatedAt']);
+      allow create, delete: if false;
     }
 
     // Carnet de contacts (nom, statut de compte, code généré, token push).

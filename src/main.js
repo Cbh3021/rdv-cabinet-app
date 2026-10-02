@@ -73,7 +73,7 @@ import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import {
   initializeFirestore, persistentLocalCache, persistentSingleTabManager,
   collection, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc,
-  onSnapshot, query, where, orderBy, limit, startAfter, getDocs, serverTimestamp, increment
+  onSnapshot, query, where, orderBy, limit, startAfter, getDocs, serverTimestamp, increment, arrayUnion, arrayRemove
 } from "firebase/firestore";
 import {
   getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
@@ -253,6 +253,46 @@ async function enableNotifications(){
     console.error("Erreur activation notifications", e);
     return {ok:false, reason:'error'};
   }
+}
+/* ---------------- ADMIN (médecin): notifications push ----------------
+   Le token FCM du téléphone du médecin est rangé dans admins/{uid}.fcmTokens
+   (tableau : plusieurs appareils possibles). Il est lu par
+   scripts/send-doctor-digest.js (récap du matin) et
+   scripts/notify-doctor-alerts.js (nouveau RDV / demande patient). */
+let adminFcmToken = null;
+async function saveAdminFcmToken(){
+  if(!isNative || !isConfigured || !auth.currentUser) return;
+  try{
+    let perm = await FirebaseMessaging.checkPermissions();
+    if(perm.receive !== 'granted') perm = await FirebaseMessaging.requestPermissions();
+    if(perm.receive !== 'granted') return;
+    const { token } = await FirebaseMessaging.getToken();
+    if(!token) return;
+    adminFcmToken = token;
+    await updateDoc(doc(db,"admins",auth.currentUser.uid), {
+      fcmTokens: arrayUnion(token),
+      fcmUpdatedAt: serverTimestamp()
+    });
+  }catch(e){
+    console.error("Erreur enregistrement token FCM médecin", e);
+  }
+}
+async function removeAdminFcmToken(){
+  try{
+    if(!adminFcmToken || !auth.currentUser) return;
+    await updateDoc(doc(db,"admins",auth.currentUser.uid), { fcmTokens: arrayRemove(adminFcmToken) });
+  }catch(e){ /* sans conséquence : le script purge les tokens invalides */ }
+}
+if(isNative && isConfigured){
+  // Token renouvelé par Android/Firebase : on le réenregistre si le médecin est connecté.
+  FirebaseMessaging.addListener('tokenReceived', ()=>{
+    if(role==='admin' && auth.currentUser) saveAdminFcmToken();
+  }).catch(()=>{});
+  // Appli ouverte : Android n'affiche pas la notification système, on montre un toast.
+  FirebaseMessaging.addListener('notificationReceived', (ev)=>{
+    const n = ev && ev.notification;
+    if(role==='admin' && n) showToast([n.title, n.body].filter(Boolean).join(' — '));
+  }).catch(()=>{});
 }
 function toE164(raw){
   let digits = (raw||"").replace(/\D/g,"");
@@ -587,6 +627,7 @@ function withTimeout(promise, ms){
 async function performSignOut(btn){
   if(btn){ btn.disabled = true; btn.dataset.prevText = btn.textContent; btn.textContent = '…'; }
   if(isConfigured){
+    if(role==='admin') await withTimeout(removeAdminFcmToken(), 3000);
     if(isNative){ await withTimeout(FirebaseAuthentication.signOut().catch(()=>{}), 4000); }
     if(auth.currentUser){ await withTimeout(signOut(auth).catch(()=>{}), 4000); }
   }
@@ -700,6 +741,7 @@ async function checkAdminAndEnter(){
       document.getElementById('adminContentWrap').style.display='';
       subscribeAdmin();
       subscribeContacts();
+      saveAdminFcmToken();
     } else {
       showAdminError(t('not_authorized_error'));
       await signOut(auth);
@@ -828,6 +870,7 @@ async function continueRecurrence(prevAppt){
 }
 
 async function createAppointment(data){
+  data = { ...data, createdBy: 'admin' }; // évite l'alerte push "nouveau RDV" pour ses propres créations
   if(isConfigured) await addDoc(apptsCol, data);
   else { appointments.push({id:uid(), ...data}); renderAdmin(); }
 }

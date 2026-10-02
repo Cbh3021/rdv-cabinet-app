@@ -28857,12 +28857,54 @@ Total Duration: ${a - u3}ms`);
       return e2 instanceof ___PRIVATE_DeleteFieldValueImpl;
     }
   };
+  function __PRIVATE_createSentinelChildContext(e2, t3, n2) {
+    return new ParseContextImpl({
+      dataSource: 3,
+      targetDoc: t3.settings.targetDoc,
+      methodName: e2._methodName,
+      arrayElement: n2
+    }, t3.databaseId, t3.serializer, t3.ignoreUndefinedProperties);
+  }
   var __PRIVATE_ServerTimestampFieldValueImpl = class ___PRIVATE_ServerTimestampFieldValueImpl extends FieldValue {
     _toFieldTransform(e2) {
       return new FieldTransform(e2.path, new __PRIVATE_ServerTimestampTransform());
     }
     isEqual(e2) {
       return e2 instanceof ___PRIVATE_ServerTimestampFieldValueImpl;
+    }
+  };
+  var __PRIVATE_ArrayUnionFieldValueImpl = class ___PRIVATE_ArrayUnionFieldValueImpl extends FieldValue {
+    constructor(e2, t3) {
+      super(e2), this._r = t3;
+    }
+    _toFieldTransform(e2) {
+      const t3 = __PRIVATE_createSentinelChildContext(
+        this,
+        e2,
+        /*array=*/
+        true
+      ), n2 = this._r.map(((e3) => __PRIVATE_parseData(e3, t3))), r2 = new __PRIVATE_ArrayUnionTransformOperation(n2);
+      return new FieldTransform(e2.path, r2);
+    }
+    isEqual(e2) {
+      return e2 instanceof ___PRIVATE_ArrayUnionFieldValueImpl && deepEqual(this._r, e2._r);
+    }
+  };
+  var __PRIVATE_ArrayRemoveFieldValueImpl = class ___PRIVATE_ArrayRemoveFieldValueImpl extends FieldValue {
+    constructor(e2, t3) {
+      super(e2), this._r = t3;
+    }
+    _toFieldTransform(e2) {
+      const t3 = __PRIVATE_createSentinelChildContext(
+        this,
+        e2,
+        /*array=*/
+        true
+      ), n2 = this._r.map(((e3) => __PRIVATE_parseData(e3, t3))), r2 = new __PRIVATE_ArrayRemoveTransformOperation(n2);
+      return new FieldTransform(e2.path, r2);
+    }
+    isEqual(e2) {
+      return e2 instanceof ___PRIVATE_ArrayRemoveFieldValueImpl && deepEqual(this._r, e2._r);
     }
   };
   var __PRIVATE_NumericIncrementFieldValueImpl = class ___PRIVATE_NumericIncrementFieldValueImpl extends FieldValue {
@@ -29149,6 +29191,12 @@ Total Duration: ${a - u3}ms`);
   }
   function serverTimestamp() {
     return new __PRIVATE_ServerTimestampFieldValueImpl("serverTimestamp");
+  }
+  function arrayUnion(...e2) {
+    return new __PRIVATE_ArrayUnionFieldValueImpl("arrayUnion", e2);
+  }
+  function arrayRemove(...e2) {
+    return new __PRIVATE_ArrayRemoveFieldValueImpl("arrayRemove", e2);
   }
   function increment(e2) {
     return new __PRIVATE_NumericIncrementFieldValueImpl("increment", e2);
@@ -40989,6 +41037,42 @@ This typically indicates that your device does not have a healthy Internet conne
       return { ok: false, reason: "error" };
     }
   }
+  var adminFcmToken = null;
+  async function saveAdminFcmToken() {
+    if (!isNative || !isConfigured || !auth.currentUser) return;
+    try {
+      let perm = await FirebaseMessaging.checkPermissions();
+      if (perm.receive !== "granted") perm = await FirebaseMessaging.requestPermissions();
+      if (perm.receive !== "granted") return;
+      const { token } = await FirebaseMessaging.getToken();
+      if (!token) return;
+      adminFcmToken = token;
+      await updateDoc(doc(db, "admins", auth.currentUser.uid), {
+        fcmTokens: arrayUnion(token),
+        fcmUpdatedAt: serverTimestamp()
+      });
+    } catch (e2) {
+      console.error("Erreur enregistrement token FCM m\xE9decin", e2);
+    }
+  }
+  async function removeAdminFcmToken() {
+    try {
+      if (!adminFcmToken || !auth.currentUser) return;
+      await updateDoc(doc(db, "admins", auth.currentUser.uid), { fcmTokens: arrayRemove(adminFcmToken) });
+    } catch (e2) {
+    }
+  }
+  if (isNative && isConfigured) {
+    FirebaseMessaging.addListener("tokenReceived", () => {
+      if (role === "admin" && auth.currentUser) saveAdminFcmToken();
+    }).catch(() => {
+    });
+    FirebaseMessaging.addListener("notificationReceived", (ev) => {
+      const n2 = ev && ev.notification;
+      if (role === "admin" && n2) showToast([n2.title, n2.body].filter(Boolean).join(" \u2014 "));
+    }).catch(() => {
+    });
+  }
   function toE164(raw) {
     let digits = (raw || "").replace(/\D/g, "");
     if (digits.startsWith(COUNTRY_CODE)) digits = digits.slice(COUNTRY_CODE.length);
@@ -41372,6 +41456,7 @@ This typically indicates that your device does not have a healthy Internet conne
       btn.textContent = "\u2026";
     }
     if (isConfigured) {
+      if (role === "admin") await withTimeout(removeAdminFcmToken(), 3e3);
       if (isNative) {
         await withTimeout(FirebaseAuthentication.signOut().catch(() => {
         }), 4e3);
@@ -41490,6 +41575,7 @@ This typically indicates that your device does not have a healthy Internet conne
         document.getElementById("adminContentWrap").style.display = "";
         subscribeAdmin();
         subscribeContacts();
+        saveAdminFcmToken();
       } else {
         showAdminError(t2("not_authorized_error"));
         await signOut(auth);
@@ -41606,6 +41692,7 @@ This typically indicates that your device does not have a healthy Internet conne
     showToast(t2("next_rdv_created").replace("{name}", prevAppt.name).replace("{date}", fmtDateShort(nextDate)).replace("{time}", prevAppt.time));
   }
   async function createAppointment(data) {
+    data = { ...data, createdBy: "admin" };
     if (isConfigured) await addDoc(apptsCol, data);
     else {
       appointments.push({ id: uid(), ...data });
@@ -41617,8 +41704,14 @@ This typically indicates that your device does not have a healthy Internet conne
     if (before && data.date && data.time && (data.date !== before.date || data.time !== before.time)) {
       await recordReschedule(before.phone, before.date, before.time);
     }
-    if (isConfigured) await updateDoc(doc(db, "appointments", id), data);
-    else {
+    if (isConfigured) {
+      try {
+        await updateDoc(doc(db, "appointments", id), data);
+      } catch (e2) {
+        console.error("Erreur modification RDV", e2);
+        alert("Impossible d'enregistrer les modifications. R\xE9essaie.");
+      }
+    } else {
       Object.assign(appointments.find((x2) => x2.id === id), data);
       renderAdmin();
     }
@@ -41626,8 +41719,14 @@ This typically indicates that your device does not have a healthy Internet conne
   async function removeAppointment(id, trackCancellation = true) {
     const a = appointments.find((x2) => x2.id === id);
     if (trackCancellation && a && !a.deleted) await recordCancellation(a.phone, a.date, a.time);
-    if (isConfigured) await updateDoc(doc(db, "appointments", id), { deleted: true, deletedAt: (/* @__PURE__ */ new Date()).toISOString() });
-    else {
+    if (isConfigured) {
+      try {
+        await updateDoc(doc(db, "appointments", id), { deleted: true, deletedAt: (/* @__PURE__ */ new Date()).toISOString() });
+      } catch (e2) {
+        console.error("Erreur suppression RDV", e2);
+        alert("Impossible de supprimer ce RDV. R\xE9essaie.");
+      }
+    } else {
       if (a) {
         a.deleted = true;
         a.deletedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -41722,7 +41821,12 @@ This typically indicates that your device does not have a healthy Internet conne
       } catch (e2) {
         console.error("Erreur mise \xE0 jour stats fid\xE9lit\xE9", e2);
       }
-      await updateDoc(doc(db, "appointments", id), { honored: value, statsCounted: value !== null });
+      try {
+        await updateDoc(doc(db, "appointments", id), { honored: value, statsCounted: value !== null });
+      } catch (e2) {
+        console.error("Erreur marquage honor\xE9/non pr\xE9sent\xE9", e2);
+        alert("Impossible d'enregistrer ce statut. R\xE9essaie.");
+      }
     } else if (a) {
       a.honored = value;
       renderAdmin();
