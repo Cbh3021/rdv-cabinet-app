@@ -818,9 +818,12 @@ function addInterval(dateStr, intervalKey){
   if(intervalKey === '4w') d.setDate(d.getDate() + 28);
   else if(intervalKey === 'monthly') d.setMonth(d.getMonth() + 1);
   else if(intervalKey === '2m') d.setMonth(d.getMonth() + 2);
+  else if(intervalKey === '85d') d.setDate(d.getDate() + 85);
+  else if(intervalKey === '90d') d.setDate(d.getDate() + 90);
   else if(intervalKey === '3m') d.setMonth(d.getMonth() + 3);
   else if(intervalKey === '6m') d.setMonth(d.getMonth() + 6);
-  return d.toISOString().slice(0,10);
+  // Format local (pas toISOString, qui passe en UTC et perd 1 jour en UTC+1)
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 
 /* ---------------- petite notification "toast" non bloquante ----------------
