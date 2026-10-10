@@ -1,0 +1,32 @@
+name: Build desktop (Windows 8.1)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'desktop-v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Copier www dans desktop
+        shell: pwsh
+        run: Copy-Item -Recurse -Force www desktop\www
+
+      - name: Installer et construire
+        working-directory: desktop
+        run: |
+          npm install
+          npm run dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RDV-CBH-setup-win
+          path: desktop/dist/*.exe

@@ -1,0 +1,29 @@
+{
+  "name": "rdv-cbh-desktop",
+  "version": "1.0.0",
+  "description": "RDV CBH - Cabinet Dr. Hédi Belhoula",
+  "main": "main.js",
+  "author": "Dr. Hédi Belhoula",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "22.3.27",
+    "electron-builder": "23.6.0"
+  },
+  "build": {
+    "appId": "com.belhoula.rdvcabinet.desktop",
+    "productName": "RDV CBH",
+    "directories": { "output": "dist" },
+    "files": ["main.js", "www/**/*"],
+    "win": { "target": "nsis" },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
