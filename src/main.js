@@ -967,10 +967,19 @@ async function notifyRequestOutcome(phone, outcome){
 async function setHonoredStatus(id, value){
   const a = appointments.find(x=>x.id===id);
   if(isConfigured && a){
+    // 1) D'abord le statut du RDV (l'action principale) : si elle échoue on
+    //    affiche le vrai code d'erreur Firestore au lieu d'un message vague.
     try{
-      // Compte en temps réel (plus besoin d'attendre le passage nocturne du
-      // script d'archivage) — statsCounted évite un double comptage le jour
-      // où ce RDV sera archivé (voir archive-old-appointments.js).
+      await updateDoc(doc(db,"appointments",id), {honored:value, statsCounted: value!==null});
+    }catch(e){
+      console.error("Erreur marquage honoré/non présenté", e);
+      alert("Impossible d'enregistrer ce statut.\n\n" + (e && e.code ? e.code + " — " : "") + (e && e.message ? e.message : e));
+      return;
+    }
+    // 2) Ensuite les compteurs de fidélité (secondaire : une erreur ici ne
+    //    doit jamais bloquer le marquage). statsCounted évite un double
+    //    comptage le jour de l'archivage (voir archive-old-appointments.js).
+    try{
       const wasCounted = a.statsCounted === true;
       const wasHonored = a.honored;
       const updates = {};
@@ -987,12 +996,10 @@ async function setHonoredStatus(id, value){
         }
         updates.currentStreak = 0; // un RDV raté casse la chaîne
       } else if(value === null && wasCounted){
-        // Annulation d'un marquage précédent (bouton "Modifier" sur le badge).
         if(wasHonored === true) updates.honoredCount = increment(-1);
         else if(wasHonored === false) updates.absentCount = increment(-1);
       }
       if(Object.keys(updates).length) await setDoc(doc(db,"patients", a.phone), updates, {merge:true});
-      // Suivi du record de la plus longue chaîne, pour référence.
       if(value === true){
         const snap = await getDoc(doc(db,"patients", a.phone));
         const cur = snap.exists() ? (snap.data().currentStreak||0) : 0;
@@ -1000,8 +1007,6 @@ async function setHonoredStatus(id, value){
         if(cur > longest) await setDoc(doc(db,"patients", a.phone), {longestStreak: cur}, {merge:true});
       }
     }catch(e){ console.error("Erreur mise à jour stats fidélité", e); }
-    try{ await updateDoc(doc(db,"appointments",id), {honored:value, statsCounted: value!==null}); }
-    catch(e){ console.error("Erreur marquage honoré/non présenté", e); alert("Impossible d'enregistrer ce statut. Réessaie."); }
   }
   else if(a){ a.honored=value; renderAdmin(); }
 }

@@ -692,11 +692,18 @@
   }
 
   var adminDebounce;
+  var listEl = document.getElementById('rdvList');
   var adminObserver = new MutationObserver(function(){
     clearTimeout(adminDebounce);
-    adminDebounce = setTimeout(decorateAdminList, 30);
+    adminDebounce = setTimeout(function(){
+      // on déconnecte pendant la décoration : sinon nos propres ajouts de
+      // pastilles redéclenchent l'observer en boucle (toutes les 30 ms)
+      adminObserver.disconnect();
+      try { decorateAdminList(); } finally {
+        if (listEl) adminObserver.observe(listEl, { childList: true, subtree: true });
+      }
+    }, 30);
   });
-  var listEl = document.getElementById('rdvList');
   if (listEl) adminObserver.observe(listEl, { childList: true, subtree: true });
 
   // ---------- Cote patient : fiche personnelle ----------
